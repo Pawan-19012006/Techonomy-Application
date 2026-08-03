@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------
     # Security
     # -------------------------------------------------
-    JWT_SECRET: str
+    JWT_SECRET: str = "temporary-development-jwt-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
 
     # -------------------------------------------------
