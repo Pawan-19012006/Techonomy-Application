@@ -165,6 +165,36 @@ This file records the development process, code changes, and rationale for all m
 - **Created File:** [.gitignore](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/.gitignore)
 - **Rationale:** Configured workspace root-level git patterns to ignore virtual environments, databases (e.g. `techonomy.db`), build caches, logs, and IDE settings globally across the repo.
 
+---
+
+## 🎨 Step 11: Enterprise React 19 Frontend Implementation
+**Action:** Built the production-ready React 19 + TypeScript + Vite + Tailwind CSS frontend application inside `frontend/`.
+- **Created Package:** `frontend/`
+- **Created Architecture:**
+  - **API Layer (`frontend/src/api/`):** [axios.ts](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/api/axios.ts) (Axios with JWT request/401 response interceptors), [auth.ts](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/api/auth.ts), [dashboard.ts](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/api/dashboard.ts), [documents.ts](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/api/documents.ts), [teams.ts](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/api/teams.ts), [chat.ts](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/api/chat.ts), [event.ts](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/api/event.ts).
+  - **Contexts (`frontend/src/contexts/`):** [AuthContext.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/contexts/AuthContext.tsx) (JWT authentication state), [ThemeContext.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/contexts/ThemeContext.tsx) (Dark/Light mode toggle).
+  - **Hooks (`frontend/src/hooks/`):** Custom TanStack Query hooks (`useAuth`, `useDashboard`, `useDocuments`, `useTeams`, `useChat`, `useEvent`).
+  - **Components (`frontend/src/components/`):** Enterprise layout components ([Sidebar.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/layouts/Sidebar.tsx), [Navbar.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/layouts/Navbar.tsx)), common widgets ([MetricCard.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/common/MetricCard.tsx), [TimerBadge.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/common/TimerBadge.tsx), [QuestionCounter.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/common/QuestionCounter.tsx), [ProtectedRoute.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/common/ProtectedRoute.tsx)), dashboard widgets ([ActivityFeed.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/dashboard/ActivityFeed.tsx), [RecentDocuments.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/dashboard/RecentDocuments.tsx)), document widgets ([DocumentCard.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/documents/DocumentCard.tsx), [DocumentModal.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/documents/DocumentModal.tsx), [UploadModal.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/documents/UploadModal.tsx)), chat widgets ([ChatMessage.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/chat/ChatMessage.tsx), [ChatInput.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/components/chat/ChatInput.tsx)).
+  - **Pages (`frontend/src/pages/`):** [LoginPage.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/pages/LoginPage.tsx), [DashboardPage.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/pages/DashboardPage.tsx), [DocumentsPage.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/pages/DocumentsPage.tsx), [KnowledgeAssistantPage.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/pages/KnowledgeAssistantPage.tsx), [RulesPage.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/pages/RulesPage.tsx), [TeamPage.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/pages/TeamPage.tsx), [NotFoundPage.tsx](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/pages/NotFoundPage.tsx).
+- **Rationale:** Delivered an enterprise-grade UI matching Fortune 500 design guidelines (Microsoft/Linear/Atlassian style, `#111827` dark sidebar, `#4F46E5` indigo primary accents, `#F8FAFC` background) consuming live FastAPI endpoints.
+
+---
+
+## 🔑 Step 12: Automatic Database Seeding & Auth Fix
+**Action:** Added `seed_initial_data()` to [sqlite.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/database/sqlite.py).
+- **Modified File:** [sqlite.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/database/sqlite.py)
+- **Rationale:** Automatically populates the SQLite database on startup with default demo team credentials (`devs@acme.com` / `SecretPassword123!`), admin team (`admin@techonomy.com` / `AdminPassword123!`), and an active competition event (`ABC Retail Pvt Ltd.`). Fixed login failures caused by unseeded empty databases.
+
+---
+
+## 🎨 Step 13: Color Grading Fix & Gitignore Update
+**Action:** Fixed Tailwind CSS v4 `@variant dark` definition in [index.css](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/index.css) and updated workspace [.gitignore](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/.gitignore).
+- **Modified Files:** [index.css](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/index.css), [.gitignore](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/.gitignore)
+- **Rationale:** Resolved text contrast mismatch where white card background rendered low-contrast pale text in dark mode. Defined `@variant dark (&:where(.dark, .dark *));` to ensure dark mode card backgrounds (`#1E293B`) and inputs (`#0F172A`) apply high-contrast white text (`#F8FAFC`). Updated root `.gitignore` to track frontend `node_modules/`, build `dist/`, and environment configuration.
+
+
+
+
 
 
 

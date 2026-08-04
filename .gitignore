@@ -1,4 +1,17 @@
 # ==========================================
+# Node.js & Frontend Build Outputs
+# ==========================================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+
+# ==========================================
 # Python
 # ==========================================
 __pycache__/
