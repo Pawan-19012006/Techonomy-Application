@@ -112,3 +112,59 @@ This file records the development process, code changes, and rationale for all m
 - **Modified File:** [.gitignore](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/.gitignore)
 - **Rationale:** Replaced the legacy `storage/` directory paths with the current `data/` subdirectory paths (`data/uploads/`, `data/exports/`, `data/documents/`) to keep local files, logs, and database files untracked.
 
+---
+
+## 🏆 Step 8: Competition Platform Layer Implementation
+
+### 1. Database Schema Enhancements
+- **Modified File:** [models.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/database/models.py)
+- **Rationale:** Enhanced `EventModel` to support Competition Events (`name`, `description`, `business_objective`, `rules`, `start_time`, `end_time`, `question_limit`, `is_active`). Added `pages` and `status` to `DocumentModel`. Added `response_time_ms` to `PromptLogModel`. Created `AuditLogModel` for system event activity.
+
+### 2. Competition Pydantic V2 Schemas
+- **Created/Modified Files:**
+  - [event.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/schemas/event.py) (`EventCreate`, `EventUpdate`, `EventResponse`, `EventStatusResponse`)
+  - [dashboard.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/schemas/dashboard.py) (`DashboardResponse` unified payload)
+  - [team.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/schemas/team.py) (`TeamQuestionMetricsResponse`, `TeamHistoryResponse`)
+  - [document.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/schemas/document.py) (`DocumentDeleteResponse`, updated metadata with pages/status)
+  - [admin.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/schemas/admin.py) (Updated analytics summary & prompt log response)
+- **Rationale:** Established input validation and OpenAPI document serialization schemas for competition management.
+
+### 3. Business Logic Services
+- **Created/Modified Files:**
+  - [timer_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/services/timer_service.py): Calculates event remaining seconds, started, and finished flags dynamically from UTC server time.
+  - [event_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/services/event_service.py): Handles event CRUD, activation, deactivation, and dynamic state evaluation (`UPCOMING`, `ACTIVE`, `PAUSED`, `COMPLETED`, `NO_EVENT`).
+  - [dashboard_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/services/dashboard_service.py): Aggregates team, event, timer, question, and document metrics for `GET /dashboard`.
+  - [team_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/services/team_service.py): Retreives question metrics and execution prompt history.
+  - [document_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/services/document_service.py): Implements document deletion, count, and listing logic without file parsing/AI.
+  - [analytics.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/services/analytics.py): Calculates total/active teams, question usage/remaining, prompt counts, and average response times.
+  - [rate_limit.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/services/rate_limit.py): Exposes question quota metrics and enforces quota exhaustion rejection.
+- **Rationale:** Strict adherence to business logic layer encapsulation.
+
+### 4. Competition API Routers
+- **Created/Modified Files:**
+  - [event.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/event.py): `GET /event`, `GET /event/status`, Admin create, update, activate, deactivate endpoints.
+  - [dashboard.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/dashboard.py): `GET /dashboard` single unified call.
+  - [history.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/history.py): `GET /history` prompt history endpoint.
+  - [teams.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/teams.py): `GET /teams/me`, `GET /teams/questions`, `GET /teams/history`.
+  - [documents.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/documents.py): Metadata upload, listing, downloading, and deletion endpoints (`DELETE /{doc_id}`).
+  - [admin.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/admin.py): Admin views for teams, prompt log filtering, documents, analytics, and event status.
+  - [main.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/main.py): Registered all competition routers.
+- **Rationale:** Clean, RESTful, documented OpenAPI endpoints.
+
+---
+
+## 📝 Step 9: Documentation Update
+**Action:** Updated the root documentation to align with competition engine features.
+- **Modified File:** [README.md](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/README.md)
+- **Rationale:** Aligned the directory structure, endpoint descriptions, dependencies list, local setup steps (Python 3.13+), and added instructions on executing the test suites using `pytest`.
+
+---
+
+## 🧹 Step 10: Root Gitignore Setup
+**Action:** Created workspace root `.gitignore`.
+- **Created File:** [.gitignore](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/.gitignore)
+- **Rationale:** Configured workspace root-level git patterns to ignore virtual environments, databases (e.g. `techonomy.db`), build caches, logs, and IDE settings globally across the repo.
+
+
+
+

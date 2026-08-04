@@ -10,6 +10,8 @@ class DocumentMetadataResponse(BaseModel):
     file_path: str
     file_size: int
     content_type: str
+    pages: int
+    status: str
     team_id: int
     uploaded_at: datetime
 
@@ -21,3 +23,10 @@ class DocumentUploadResponse(BaseModel):
 
     message: str
     document: DocumentMetadataResponse
+
+
+class DocumentDeleteResponse(BaseModel):
+    """Response schema following document deletion."""
+
+    message: str
+    doc_id: int

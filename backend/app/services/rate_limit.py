@@ -1,3 +1,4 @@
+from typing import Dict
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -6,7 +7,24 @@ from app.utils.logging import logger
 
 
 class RateLimiterService:
-    """Service enforcing team question quotas and rate limits."""
+    """Service enforcing team question quotas and exposing quota status metrics."""
+
+    @staticmethod
+    def get_quota_metrics(team: TeamModel) -> Dict[str, int]:
+        """Exposes question count, usage, and remaining metrics for a team.
+
+        Args:
+            team: Team database model.
+
+        Returns:
+            Dict containing question_limit, questions_used, and questions_remaining.
+        """
+        remaining = max(0, team.question_limit - team.questions_used)
+        return {
+            "question_limit": team.question_limit,
+            "questions_used": team.questions_used,
+            "questions_remaining": remaining
+        }
 
     @staticmethod
     def verify_quota(team: TeamModel) -> None:
@@ -17,12 +35,12 @@ class RateLimiterService:
         """
         if team.questions_used >= team.question_limit:
             logger.warning(
-                f"Quota exceeded for Team '{team.name}' (ID: {team.id}). "
+                f"Quota limit reached for Team '{team.name}' (ID: {team.id}). "
                 f"Used: {team.questions_used}/{team.question_limit}."
             )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Question quota limit reached ({team.question_limit} questions allowed)."
+                detail=f"Question limit reached ({team.question_limit} questions allowed)."
             )
 
     @staticmethod

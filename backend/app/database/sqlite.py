@@ -41,3 +41,11 @@ def init_db() -> None:
     logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
+
+
+def reset_db() -> None:
+    """Drops and recreates all database tables (For test setups and schema resets)."""
+    logger.info("Resetting database schema...")
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database schema reset complete.")

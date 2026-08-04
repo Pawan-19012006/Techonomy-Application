@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api import admin, auth, chat, documents, teams
+from app.api import admin, auth, chat, dashboard, documents, event, history, teams
 from app.config import settings
 from app.database.sqlite import get_db, init_db
 from app.middleware.exception_handler import global_exception_handler
@@ -32,15 +32,18 @@ app = FastAPI(
 app.add_middleware(RequestLoggingMiddleware)
 app.add_exception_handler(Exception, global_exception_handler)
 
-# Include Routers
+# Include API Routers under settings.API_PREFIX
 app.include_router(auth.router, prefix=settings.API_PREFIX)
+app.include_router(event.router, prefix=settings.API_PREFIX)
+app.include_router(dashboard.router, prefix=settings.API_PREFIX)
 app.include_router(teams.router, prefix=settings.API_PREFIX)
+app.include_router(history.router, prefix=settings.API_PREFIX)
 app.include_router(documents.router, prefix=settings.API_PREFIX)
 app.include_router(admin.router, prefix=settings.API_PREFIX)
 app.include_router(chat.router, prefix=settings.API_PREFIX)
 
 
-@app.get("/", tags=["Health"])
+@app.get("/", tags=["Health"], summary="Root Status Endpoint")
 async def root() -> Dict[str, str]:
     """Root status endpoint."""
     return {
@@ -50,7 +53,7 @@ async def root() -> Dict[str, str]:
     }
 
 
-@app.get("/health", tags=["Health"])
+@app.get("/health", tags=["Health"], summary="Health Check Endpoint")
 async def health_check(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Health check endpoint verifying Backend, Database, and Configuration status."""
     db_status = "healthy"

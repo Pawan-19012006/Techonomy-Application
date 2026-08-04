@@ -1,12 +1,12 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
-from app.database.models import TeamModel
-from app.schemas.team import TeamUsageResponse
+from app.database.models import PromptLogModel, TeamModel
+from app.schemas.team import TeamQuestionMetricsResponse, TeamUsageResponse
 
 
 class TeamService:
-    """Service handling Team information and usage metrics."""
+    """Service handling Team information, history, and usage metrics."""
 
     @staticmethod
     def get_team_by_id(db: Session, team_id: int) -> Optional[TeamModel]:
@@ -38,6 +38,40 @@ class TeamService:
             questions_used=team.questions_used,
             remaining_questions=remaining
         )
+
+    @staticmethod
+    def get_team_questions(team: TeamModel) -> TeamQuestionMetricsResponse:
+        """Returns question limit, used, and remaining metrics for a Team.
+
+        Args:
+            team: Team database instance.
+
+        Returns:
+            TeamQuestionMetricsResponse: Breakdown of question quota.
+        """
+        remaining = max(0, team.question_limit - team.questions_used)
+        return TeamQuestionMetricsResponse(
+            question_limit=team.question_limit,
+            questions_used=team.questions_used,
+            questions_remaining=remaining
+        )
+
+    @staticmethod
+    def get_team_history(db: Session, team_id: int, limit: int = 100) -> Tuple[List[PromptLogModel], int]:
+        """Retrieves query prompt execution history for a Team.
+
+        Args:
+            db: Database session.
+            team_id: Team ID.
+            limit: Query return limit.
+
+        Returns:
+            Tuple[List[PromptLogModel], int]: List of prompt log entries and total count.
+        """
+        query = db.query(PromptLogModel).filter(PromptLogModel.team_id == team_id)
+        total = query.count()
+        logs = query.order_by(PromptLogModel.created_at.desc()).limit(limit).all()
+        return logs, total
 
     @staticmethod
     def list_all_teams(db: Session) -> List[TeamModel]:

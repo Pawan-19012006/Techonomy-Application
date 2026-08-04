@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.sqlite import init_db
+from app.database.sqlite import reset_db
 from app.main import app
 
 client = TestClient(app)
@@ -11,8 +11,8 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_database():
-    """Ensures database tables exist before each test."""
-    init_db()
+    """Ensures a clean database schema before each test."""
+    reset_db()
 
 
 def test_health_check():
@@ -43,13 +43,13 @@ def test_auth_and_team_flow():
     headers = {"Authorization": f"Bearer {token}"}
 
     # Get Profile & Usage
-    res = client.get("/api/auth/me", headers=headers)
+    res = client.get("/api/teams/me", headers=headers)
     assert res.status_code == 200
     assert res.json()["email"] == "beta@corp.com"
 
-    res = client.get("/api/teams/usage", headers=headers)
+    res = client.get("/api/teams/questions", headers=headers)
     assert res.status_code == 200
-    assert res.json()["remaining_questions"] == 2
+    assert res.json()["questions_remaining"] == 2
 
 
 def test_rate_limiter():

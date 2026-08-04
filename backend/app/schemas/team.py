@@ -1,6 +1,8 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, EmailStr, ConfigDict
+
+from app.schemas.admin import PromptLogResponse
 
 
 class TeamCreate(BaseModel):
@@ -36,3 +38,18 @@ class TeamUsageResponse(BaseModel):
     remaining_questions: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TeamQuestionMetricsResponse(BaseModel):
+    """Detailed question usage response model for GET /team/questions."""
+
+    question_limit: int
+    questions_used: int
+    questions_remaining: int
+
+
+class TeamHistoryResponse(BaseModel):
+    """Response payload for Team prompt execution history."""
+
+    logs: List[PromptLogResponse]
+    total_count: int

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.sqlite import Base
@@ -29,7 +29,24 @@ class TeamModel(Base):
     # Relationships
     documents: Mapped[List["DocumentModel"]] = relationship("DocumentModel", back_populates="team", cascade="all, delete-orphan")
     prompt_logs: Mapped[List["PromptLogModel"]] = relationship("PromptLogModel", back_populates="team", cascade="all, delete-orphan")
-    events: Mapped[List["EventModel"]] = relationship("EventModel", back_populates="team", cascade="all, delete-orphan")
+    audit_logs: Mapped[List["AuditLogModel"]] = relationship("AuditLogModel", back_populates="team", cascade="all, delete-orphan")
+
+
+class EventModel(Base):
+    """SQLAlchemy model representing a Competition Event."""
+
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    business_objective: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rules: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    question_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
 class DocumentModel(Base):
@@ -42,6 +59,8 @@ class DocumentModel(Base):
     file_path: Mapped[str] = mapped_column(String(512), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False, default="application/pdf")
+    pages: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="ready", nullable=False)
     team_id: Mapped[int] = mapped_column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
@@ -59,16 +78,17 @@ class PromptLogModel(Base):
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status_code: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    response_time_ms: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationship
     team: Mapped["TeamModel"] = relationship("TeamModel", back_populates="prompt_logs")
 
 
-class EventModel(Base):
+class AuditLogModel(Base):
     """SQLAlchemy model for tracking system events and audit logs."""
 
-    __tablename__ = "events"
+    __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     team_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -77,4 +97,4 @@ class EventModel(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationship
-    team: Mapped[Optional["TeamModel"]] = relationship("TeamModel", back_populates="events")
+    team: Mapped[Optional["TeamModel"]] = relationship("TeamModel", back_populates="audit_logs")

@@ -1,0 +1,51 @@
+# ==========================================
+# Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ==========================================
+# Virtual Environments
+# ==========================================
+.venv/
+venv/
+env/
+backend/.venv/
+backend/venv/
+
+# ==========================================
+# IDEs & Editor Configuration
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==========================================
+# Operating System
+# ==========================================
+.DS_Store
+
+# ==========================================
+# Databases (SQLite & Qdrant local storage)
+# ==========================================
+*.db
+*.sqlite3
+backend/techonomy.db
+qdrant_storage/
+backend/qdrant_storage/
+
+# ==========================================
+# Runtime Logs & App Data
+# ==========================================
+logs/
+*.log
+backend/logs/
+backend/data/uploads/
+backend/data/exports/
+backend/data/documents/

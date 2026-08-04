@@ -1,3 +1,4 @@
+import time
 from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -12,16 +13,18 @@ from app.services.rate_limit import RateLimiterService
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
-@router.post("/query", response_model=ChatQueryResponse)
+@router.post("/query", response_model=ChatQueryResponse, summary="Submit Chat Query Prompt (Placeholder Interface)")
 async def process_chat_query(
     payload: ChatQueryRequest,
     current_team: Annotated[TeamModel, Depends(get_current_team)],
     db: Annotated[Session, Depends(get_db)]
 ) -> ChatQueryResponse:
-    """Processes a user prompt query (Placeholder endpoint without AI processing).
+    """Processes a user prompt query (Placeholder interface without AI processing).
 
-    Validates quota, consumes 1 usage token, logs the prompt, and returns a placeholder response.
+    Validates quota, consumes 1 usage token, measures processing time, logs prompt, and returns placeholder text.
     """
+    start_time = time.time()
+
     # Verify rate limit / question quota
     RateLimiterService.verify_quota(current_team)
 
@@ -33,13 +36,16 @@ async def process_chat_query(
         "Backend foundation layer active. AI/RAG engine pending implementation."
     )
 
+    elapsed_ms = (time.time() - start_time) * 1000.0
+
     # Audit log prompt
     AnalyticsService.log_prompt(
         db=db,
         team_id=current_team.id,
         prompt=payload.query,
         response=placeholder_response,
-        status_code=200
+        status_code=200,
+        response_time_ms=elapsed_ms
     )
 
     return ChatQueryResponse(
