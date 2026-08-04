@@ -1,56 +1,39 @@
 from functools import lru_cache
-
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """
-    Central configuration for the entire application.
-    All configurable values should live here.
+    """Central configuration for the Techonomy backend application.
+
+    Loads values from environment variables or .env file with default fallbacks.
     """
 
-    # -------------------------------------------------
-    # Application
-    # -------------------------------------------------
+    # Application Configuration
     PROJECT_NAME: str = "Techonomy"
     VERSION: str = "0.1.0"
     DEBUG: bool = True
-
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    API_PREFIX: str = "/api"
 
-    # -------------------------------------------------
-    # Security
-    # -------------------------------------------------
+    # Database Configuration
+    DATABASE_URL: str = "sqlite:///./techonomy.db"
+    SQL_ECHO: bool = False
+
+    # Security Configuration
     JWT_SECRET: str = "temporary-development-jwt-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
-    # -------------------------------------------------
-    # Event
-    # -------------------------------------------------
-    QUESTION_LIMIT: int = 10
+    # Rate Limiting & Quotas
+    DEFAULT_QUESTION_LIMIT: int = 10
 
-    # -------------------------------------------------
-    # OpenRouter
-    # -------------------------------------------------
-    OPENROUTER_API_KEY: str = ""
-    MODEL_NAME: str = "cohere/north-mini-code:free"
-
-    # -------------------------------------------------
-    # Retrieval
-    # -------------------------------------------------
-    TOP_K: int = 5
-
-    # -------------------------------------------------
-    # Database
-    # -------------------------------------------------
-    DATABASE_URL: str = "sqlite:///./techonomy.db"
-
-    # -------------------------------------------------
-    # Qdrant
-    # -------------------------------------------------
-    QDRANT_HOST: str = "localhost"
-    QDRANT_PORT: int = 6333
+    # Logging & Storage Paths
+    LOG_LEVEL: str = "INFO"
+    BASE_DIR: Path = Path(__file__).resolve().parent.parent
+    UPLOAD_DIR: Path = BASE_DIR / "data" / "uploads"
+    LOG_DIR: Path = BASE_DIR / "logs"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -61,12 +44,12 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """
-    Returns a cached Settings object.
+    """Returns a cached instance of application settings.
 
-    This ensures the .env file is loaded only once.
+    Returns:
+        Settings: Application configuration instance.
     """
     return Settings()
 
 
-settings = get_settings()
+settings: Settings = get_settings()

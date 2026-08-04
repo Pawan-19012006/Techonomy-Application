@@ -65,10 +65,11 @@ storage/embeddings/
 storage/snapshots/
 
 # ==========================================
-# Uploaded Documents
+# Uploaded Documents / Runtime Data
 # ==========================================
-storage/uploads/
-storage/exports/
+data/uploads/
+data/exports/
+data/documents/
 
 # ==========================================
 # Docker

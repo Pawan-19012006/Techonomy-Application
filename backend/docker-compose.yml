@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: techonomy_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PROJECT_NAME=Techonomy
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DATABASE_URL=sqlite:///./techonomy.db
+      - JWT_SECRET=temporary-development-jwt-secret-key-change-in-production
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped

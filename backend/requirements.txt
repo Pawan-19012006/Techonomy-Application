@@ -1,5 +1,12 @@
 fastapi
 uvicorn
-pydantic
+pydantic[email]
 pydantic-settings
 python-dotenv
+sqlalchemy>=2.0
+pyjwt>=2.8.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.1
+python-multipart>=0.0.9
+email-validator
+httpx
