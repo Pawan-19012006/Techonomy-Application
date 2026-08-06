@@ -1,4 +1,4 @@
-"""PDF Loader alias module pointing to app.knowledge.loaders.pdf_loader."""
+"""Document Loaders package."""
 
 from app.knowledge.loaders.pdf_loader import PDFLoader
 

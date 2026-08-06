@@ -192,6 +192,24 @@ This file records the development process, code changes, and rationale for all m
 - **Modified Files:** [index.css](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/index.css), [.gitignore](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/.gitignore)
 - **Rationale:** Resolved text contrast mismatch where white card background rendered low-contrast pale text in dark mode. Defined `@variant dark (&:where(.dark, .dark *));` to ensure dark mode card backgrounds (`#1E293B`) and inputs (`#0F172A`) apply high-contrast white text (`#F8FAFC`). Updated root `.gitignore` to track frontend `node_modules/`, build `dist/`, and environment configuration.
 
+---
+
+## ⚙️ Step 14: Enterprise Knowledge Engine Phase 1 (PDF -> Parser -> Cleaner -> Document)
+**Action:** Implemented Phase 1 document ingestion foundation converting raw PDF files into clean `Document` objects.
+- **Created/Updated Files:**
+  - [exceptions.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/exceptions.py): Custom exceptions hierarchy (`PDFLoaderError`, `DocumentParserError`, `TextCleanerError`).
+  - [page.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/page.py): `Page` Pydantic v2 domain model (`page_number`, `text`, `metadata`, `char_count`).
+  - [document.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/document.py): `Document` Pydantic v2 domain model (`id`, `filename`, `title`, `file_type`, `total_pages`, `pages`, `metadata`, `total_characters`).
+  - [chunk.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/chunk.py): `Chunk` Pydantic v2 domain model definition (no chunking logic implemented).
+  - [pdf_loader.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/loaders/pdf_loader.py): `PDFLoader` using PyMuPDF (`fitz`) for raw page text extraction.
+  - [parser.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/ingestion/parser.py): `DocumentParser` orchestrating loader selection and `Document` object creation.
+  - [cleaner.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/ingestion/cleaner.py): `TextCleaner` normalizing whitespace, collapsing consecutive newlines, and stripping repeated headers/footers across pages while preserving page structure and order.
+  - [ingest.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/ingestion/ingest.py): `IngestionPipeline` and `ingest_pdf()` coordinator (`PDF -> Parser -> Cleaner -> Clean Document`).
+  - [test_parser.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/test_parser.py): Terminal test script for standalone execution without DB/Qdrant/API dependencies.
+  - [test_knowledge_phase1.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_knowledge_phase1.py): Pytest unit test suite (**11/11 tests passed**).
+- **Rationale:** Strict adherence to Phase 1 boundaries without embeddings, vector search, Qdrant, retrieval, LLMs, or prompt engineering.
+
+
 
 
 
