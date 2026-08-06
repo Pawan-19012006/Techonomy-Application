@@ -39,3 +39,23 @@ class MetadataBuilderError(KnowledgeEngineError):
 class StatisticsGeneratorError(KnowledgeEngineError):
     """Raised when document statistics calculation fails."""
     pass
+
+
+class SemanticChunkerError(KnowledgeEngineError):
+    """Raised when semantic chunking fails."""
+    pass
+
+
+class ChunkOptimizerError(KnowledgeEngineError):
+    """Raised when chunk optimization (merging/splitting) fails."""
+    pass
+
+
+class ChunkValidatorError(KnowledgeEngineError):
+    """Raised when chunk validation encounters critical failures."""
+    pass
+
+
+class TokenEstimatorError(KnowledgeEngineError):
+    """Raised when token estimation fails."""
+    pass

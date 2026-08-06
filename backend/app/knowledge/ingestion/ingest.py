@@ -1,7 +1,7 @@
-"""Ingestion and Knowledge Structuring Pipeline Coordinator."""
+"""Ingestion, Knowledge Structuring, and Optimization Pipeline Coordinator."""
 
 from pathlib import Path
-from typing import Optional, Union
+from typing import List, Optional, Tuple, Union
 
 from app.knowledge.analysis.hierarchy_builder import HierarchyBuilder
 from app.knowledge.analysis.statistics import StatisticsGenerator
@@ -9,13 +9,19 @@ from app.knowledge.analysis.structure_analyzer import StructureAnalyzer
 from app.knowledge.ingestion.cleaner import TextCleaner
 from app.knowledge.ingestion.parser import DocumentParser
 from app.knowledge.metadata.metadata_builder import MetadataBuilder
+from app.knowledge.models.chunk_statistics import ChunkStatistics
 from app.knowledge.models.document import Document
+from app.knowledge.models.knowledge_chunk import KnowledgeChunk
 from app.knowledge.models.structured_document import StructuredDocument
+from app.knowledge.optimization.chunk_optimizer import ChunkOptimizer
+from app.knowledge.optimization.chunk_validator import ChunkValidator
+from app.knowledge.optimization.semantic_chunker import SemanticChunker
+from app.knowledge.optimization.token_estimator import TokenEstimator
 from app.utils.logging import logger
 
 
 class IngestionPipeline:
-    """Coordinates Phase 1 (Ingestion) and Phase 2 (Knowledge Structuring) pipelines."""
+    """Coordinates Phase 1 (Ingestion), Phase 2 (Knowledge Structuring), and Phase 3 (Knowledge Optimization) pipelines."""
 
     def __init__(
         self,
@@ -25,6 +31,10 @@ class IngestionPipeline:
         hierarchy_builder: Optional[HierarchyBuilder] = None,
         metadata_builder: Optional[MetadataBuilder] = None,
         statistics_generator: Optional[StatisticsGenerator] = None,
+        semantic_chunker: Optional[SemanticChunker] = None,
+        chunk_optimizer: Optional[ChunkOptimizer] = None,
+        chunk_validator: Optional[ChunkValidator] = None,
+        token_estimator: Optional[TokenEstimator] = None,
     ):
         """Initializes pipeline components."""
         self.parser = parser or DocumentParser()
@@ -33,6 +43,10 @@ class IngestionPipeline:
         self.hierarchy_builder = hierarchy_builder or HierarchyBuilder()
         self.metadata_builder = metadata_builder or MetadataBuilder()
         self.statistics_generator = statistics_generator or StatisticsGenerator()
+        self.semantic_chunker = semantic_chunker or SemanticChunker()
+        self.chunk_optimizer = chunk_optimizer or ChunkOptimizer()
+        self.chunk_validator = chunk_validator or ChunkValidator()
+        self.token_estimator = token_estimator or TokenEstimator()
 
     def process_pdf(self, file_path: Union[str, Path], document_id: Optional[str] = None) -> Document:
         """Executes Phase 1 ingestion pipeline on a PDF file: PDF -> Parser -> Cleaner -> Clean Document.
@@ -73,19 +87,12 @@ class IngestionPipeline:
         """
         logger.info(f"=== Starting Knowledge Structuring Pipeline (Phase 2) for '{clean_document.filename}' ===")
 
-        # Step 1: Detect structural sections
         sections = self.analyzer.analyze(clean_document)
-
-        # Step 2: Build document hierarchy parent-child links
         hierarchy = self.hierarchy_builder.build_hierarchy(sections)
-
-        # Step 3: Enrich sections with structured metadata
         enriched_sections = self.metadata_builder.build_metadata(
             document_id=clean_document.id,
             sections=sections
         )
-
-        # Step 4: Compute document statistics
         stats = self.statistics_generator.generate(
             total_pages=clean_document.total_pages,
             sections=enriched_sections
@@ -108,6 +115,58 @@ class IngestionPipeline:
         )
         return structured_doc
 
+    def optimize_chunks(
+        self,
+        structured_doc: StructuredDocument,
+        max_tokens: int = 512,
+        min_tokens: int = 30,
+        overlap_tokens: int = 50,
+    ) -> Tuple[List[KnowledgeChunk], ChunkStatistics]:
+        """Executes Phase 3 Knowledge Optimization pipeline on a StructuredDocument object.
+
+        Pipeline Steps:
+            1. Semantic Chunker -> Group document sections by semantic boundaries.
+            2. Chunk Optimizer -> Merge tiny chunks and split oversized chunks.
+            3. Chunk Validator -> Audit chunk constraints (non-empty, token budget, metadata).
+            4. Token Estimator -> Calculate estimated token counts.
+
+        Args:
+            structured_doc (StructuredDocument): Structured Document object from Phase 2.
+            max_tokens (int): Maximum token budget ceiling per chunk.
+            min_tokens (int): Minimum token threshold for merging small fragments.
+            overlap_tokens (int): Overlap token count between adjacent chunks.
+
+        Returns:
+            Tuple[List[KnowledgeChunk], ChunkStatistics]: Tuple of (valid_chunks, chunk_statistics).
+        """
+        logger.info(f"=== Starting Knowledge Optimization Pipeline (Phase 3) for '{structured_doc.filename}' ===")
+
+        # Step 1: Semantic Chunker
+        raw_chunks = self.semantic_chunker.chunk_document(
+            structured_doc,
+            max_tokens=max_tokens,
+            overlap_tokens=overlap_tokens,
+        )
+
+        # Step 2: Chunk Optimizer
+        optimized_chunks = self.chunk_optimizer.optimize(
+            raw_chunks,
+            min_tokens=min_tokens,
+            max_tokens=max_tokens,
+        )
+
+        # Step 3 & 4: Chunk Validator & Token Estimator
+        valid_chunks, chunk_stats = self.chunk_validator.validate_chunks(
+            optimized_chunks,
+            max_tokens=max_tokens,
+        )
+
+        logger.info(
+            f"=== Completed Knowledge Optimization Pipeline (Phase 3) for '{structured_doc.filename}' === "
+            f"[Chunks: {chunk_stats.total_chunks}, Total Tokens: {chunk_stats.total_tokens}, Avg Size: {chunk_stats.average_chunk_size} chars]"
+        )
+        return valid_chunks, chunk_stats
+
     def process_pdf_to_structured(self, file_path: Union[str, Path], document_id: Optional[str] = None) -> StructuredDocument:
         """Executes full Phase 1 + Phase 2 pipeline on a PDF file.
 
@@ -121,6 +180,25 @@ class IngestionPipeline:
         clean_doc = self.process_pdf(file_path, document_id=document_id)
         return self.structure_document(clean_doc)
 
+    def process_pdf_to_chunks(
+        self,
+        file_path: Union[str, Path],
+        document_id: Optional[str] = None,
+        max_tokens: int = 512,
+    ) -> Tuple[List[KnowledgeChunk], ChunkStatistics]:
+        """Executes full end-to-end pipeline (Phase 1 + 2 + 3) on a PDF file.
+
+        Args:
+            file_path (Union[str, Path]): Path to PDF file.
+            document_id (Optional[str]): Optional custom document UUID.
+            max_tokens (int): Maximum token budget ceiling per chunk.
+
+        Returns:
+            Tuple[List[KnowledgeChunk], ChunkStatistics]: Tuple of (valid_chunks, chunk_statistics).
+        """
+        structured_doc = self.process_pdf_to_structured(file_path, document_id=document_id)
+        return self.optimize_chunks(structured_doc, max_tokens=max_tokens)
+
 
 def ingest_pdf(file_path: Union[str, Path], document_id: Optional[str] = None) -> Document:
     """Helper function to execute Phase 1 ingestion pipeline."""
@@ -129,6 +207,16 @@ def ingest_pdf(file_path: Union[str, Path], document_id: Optional[str] = None) -
 
 
 def structure_pdf(file_path: Union[str, Path], document_id: Optional[str] = None) -> StructuredDocument:
-    """Helper function to execute full Phase 1 + Phase 2 structuring pipeline."""
+    """Helper function to execute Phase 1 + Phase 2 structuring pipeline."""
     pipeline = IngestionPipeline()
     return pipeline.process_pdf_to_structured(file_path, document_id=document_id)
+
+
+def chunk_pdf(
+    file_path: Union[str, Path],
+    document_id: Optional[str] = None,
+    max_tokens: int = 512,
+) -> Tuple[List[KnowledgeChunk], ChunkStatistics]:
+    """Helper function to execute full end-to-end (Phase 1 + 2 + 3) chunking pipeline."""
+    pipeline = IngestionPipeline()
+    return pipeline.process_pdf_to_chunks(file_path, document_id=document_id, max_tokens=max_tokens)
