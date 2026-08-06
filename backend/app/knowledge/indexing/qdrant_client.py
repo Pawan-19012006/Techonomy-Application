@@ -15,6 +15,8 @@ from app.utils.logging import logger
 class QdrantClientWrapper:
     """Wrapper around qdrant-client providing collection lifecycle and point upsert methods."""
 
+    _shared_client_instance: Optional[QdrantClient] = None
+
     def __init__(
         self,
         host: str = settings.QDRANT_HOST,
@@ -45,6 +47,10 @@ class QdrantClientWrapper:
         if self._client is not None:
             return self._client
 
+        if QdrantClientWrapper._shared_client_instance is not None:
+            self._client = QdrantClientWrapper._shared_client_instance
+            return self._client
+
         logger.info(f"Connecting to Qdrant at '{self.host}:{self.port}'...")
 
         try:
@@ -52,6 +58,7 @@ class QdrantClientWrapper:
             client = QdrantClient(host=self.host, port=self.port, timeout=2.0)
             client.get_collections()
             self._client = client
+            QdrantClientWrapper._shared_client_instance = client
             logger.info(f"Successfully connected to Qdrant server at '{self.host}:{self.port}'.")
             return self._client
         except Exception as e:
@@ -62,6 +69,7 @@ class QdrantClientWrapper:
             try:
                 # Local disk storage fallback
                 self._client = QdrantClient(path=self.storage_path)
+                QdrantClientWrapper._shared_client_instance = self._client
                 logger.info(f"Successfully initialized local Qdrant engine at '{self.storage_path}'.")
                 return self._client
             except Exception as fallback_err:
@@ -70,6 +78,7 @@ class QdrantClientWrapper:
                 )
                 try:
                     self._client = QdrantClient(location=":memory:")
+                    QdrantClientWrapper._shared_client_instance = self._client
                     logger.info("Successfully initialized in-memory Qdrant client.")
                     return self._client
                 except Exception as mem_err:

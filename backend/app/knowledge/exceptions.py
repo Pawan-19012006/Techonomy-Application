@@ -94,3 +94,38 @@ class CollectionManagerError(KnowledgeEngineError):
 class IndexManagerError(KnowledgeEngineError):
     """Raised when full indexing pipeline orchestration fails."""
     pass
+
+
+class QueryProcessorError(KnowledgeEngineError):
+    """Raised when user query validation or normalization fails."""
+    pass
+
+
+class QueryEmbedderError(KnowledgeEngineError):
+    """Raised when query vector embedding fails."""
+    pass
+
+
+class VectorSearchError(KnowledgeEngineError):
+    """Raised when Qdrant vector similarity search fails."""
+    pass
+
+
+class SearchFilterError(KnowledgeEngineError):
+    """Raised when metadata search filter construction fails."""
+    pass
+
+
+class RerankerError(KnowledgeEngineError):
+    """Raised when search result reranking fails."""
+    pass
+
+
+class ContextBuilderError(KnowledgeEngineError):
+    """Raised when context text assembly or citation generation fails."""
+    pass
+
+
+class RetrievalPipelineError(KnowledgeEngineError):
+    """Raised when full retrieval pipeline orchestration fails."""
+    pass

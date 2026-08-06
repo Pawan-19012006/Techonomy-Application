@@ -266,6 +266,29 @@ This file records the development process, code changes, and rationale for all m
   - [test_knowledge_phase4.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_knowledge_phase4.py): Pytest unit test suite (**27/27 tests passed**).
 - **Rationale:** Strict adherence to Phase 4 boundaries without retrieval, RAG, question answering, prompt engineering, OpenRouter, FastAPI endpoints, or search APIs.
 
+---
+
+## 🔎 Step 18: Enterprise Knowledge Retrieval Engine (Phase 5 Retrieval)
+**Action:** Implemented Phase 5 Knowledge Retrieval Engine processing user queries, embedding questions with local `BAAI/bge-small-en-v1.5`, executing vector search against Qdrant, reranking matches with hybrid heuristics, and building synthesized context packages.
+- **Created/Updated Files:**
+  - [config.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/config.py): Added `RETRIEVAL_TOP_K` (`10`), `RETRIEVAL_RERANK_TOP_N` (`5`), `RETRIEVAL_CONTEXT_TOKEN_BUDGET` (`2000`), and `RETRIEVAL_MINIMUM_SIMILARITY` (`0.3`).
+  - [exceptions.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/exceptions.py): Added `QueryProcessorError`, `QueryEmbedderError`, `VectorSearchError`, `SearchFilterError`, `RerankerError`, `ContextBuilderError`, and `RetrievalPipelineError`.
+  - [processed_query.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/processed_query.py): `ProcessedQuery` domain model (`original_query`, `normalized_query`, `character_count`, `word_count`, `is_valid`, `metadata`).
+  - [search_result.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/search_result.py): `SearchResult` domain model (`chunk_id`, `document_id`, `document_name`, `score`, `content`, `page_numbers`, `section_title`, `section_type`, `hierarchy_level`, `reading_order`, `estimated_tokens`, `payload`).
+  - [context_package.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/context_package.py): `ContextPackage` domain model (`context_text`, `estimated_tokens`, `chunks_used`, `sources`, `source_chunks`, `metadata`).
+  - [retrieval_result.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/retrieval_result.py): `RetrievalResult` model (`processed_query`, `embedding_dimension`, `top_k_searched`, `top_n_reranked`, `raw_search_results`, `reranked_results`, `context_package`, `processing_time`).
+  - [query_processor.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/retrieval/query_processor.py): `QueryProcessor` validating and normalizing raw input questions.
+  - [query_embedder.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/retrieval/query_embedder.py): `QueryEmbedder` generating L2-normalized dense vector embeddings using shared `EmbeddingGenerator`.
+  - [search_filters.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/retrieval/search_filters.py): `SearchFilters` building reusable Qdrant payload filters (`document_id`, `page_numbers`, `section_type`, `minimum_similarity`).
+  - [vector_search.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/retrieval/vector_search.py): `VectorSearch` executing semantic similarity queries against Qdrant collection.
+  - [reranker.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/retrieval/reranker.py): `Reranker` performing hybrid scoring (cosine similarity + keyword overlap + section title boost + heading boost).
+  - [context_builder.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/retrieval/context_builder.py): `ContextBuilder` deduplicating chunks, generating source citations, and enforcing token budget limits.
+  - [retrieval_pipeline.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/retrieval/retrieval_pipeline.py): `RetrievalPipeline` and `retrieve_context()` pipeline coordinator.
+  - [test_retrieval.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/test_retrieval.py): Terminal test script printing formatted query metrics, vector search top K, reranked top N, context token estimates, and citations.
+  - [test_knowledge_phase5.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_knowledge_phase5.py): Pytest unit test suite (**33/33 tests passed**).
+- **Rationale:** Strict adherence to Phase 5 boundaries without LLM calls, OpenRouter, prompt engineering, chatbot, FastAPI endpoints, or frontend integration.
+
+
 
 
 

@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     QDRANT_DISTANCE_METRIC: str = "Cosine"
     QDRANT_STORAGE_PATH: str = "./qdrant_storage"
 
+    # Knowledge Retrieval Engine Configuration
+    RETRIEVAL_TOP_K: int = 10
+    RETRIEVAL_RERANK_TOP_N: int = 5
+    RETRIEVAL_CONTEXT_TOKEN_BUDGET: int = 2000
+    RETRIEVAL_MINIMUM_SIMILARITY: float = 0.3
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
