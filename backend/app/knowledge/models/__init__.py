@@ -3,5 +3,14 @@
 from app.knowledge.models.page import Page
 from app.knowledge.models.document import Document
 from app.knowledge.models.chunk import Chunk
+from app.knowledge.models.section import Section
+from app.knowledge.models.structured_document import StructuredDocument, DocumentStatistics
 
-__all__ = ["Page", "Document", "Chunk"]
+__all__ = [
+    "Page",
+    "Document",
+    "Chunk",
+    "Section",
+    "StructuredDocument",
+    "DocumentStatistics",
+]

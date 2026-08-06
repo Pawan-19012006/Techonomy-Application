@@ -19,3 +19,23 @@ class DocumentParserError(KnowledgeEngineError):
 class TextCleanerError(KnowledgeEngineError):
     """Raised when text cleaning or normalization fails."""
     pass
+
+
+class StructureAnalyzerError(KnowledgeEngineError):
+    """Raised when structural layout or element analysis fails."""
+    pass
+
+
+class HierarchyBuilderError(KnowledgeEngineError):
+    """Raised when document hierarchy tree assembly fails."""
+    pass
+
+
+class MetadataBuilderError(KnowledgeEngineError):
+    """Raised when metadata enrichment fails."""
+    pass
+
+
+class StatisticsGeneratorError(KnowledgeEngineError):
+    """Raised when document statistics calculation fails."""
+    pass
