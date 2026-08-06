@@ -7,6 +7,9 @@ from app.knowledge.models.section import Section
 from app.knowledge.models.structured_document import StructuredDocument, DocumentStatistics
 from app.knowledge.models.knowledge_chunk import KnowledgeChunk
 from app.knowledge.models.chunk_statistics import ChunkStatistics
+from app.knowledge.models.embedding import Embedding
+from app.knowledge.models.indexed_chunk import IndexedChunk
+from app.knowledge.models.index_result import IndexResult
 
 __all__ = [
     "Page",
@@ -17,4 +20,7 @@ __all__ = [
     "DocumentStatistics",
     "KnowledgeChunk",
     "ChunkStatistics",
+    "Embedding",
+    "IndexedChunk",
+    "IndexResult",
 ]

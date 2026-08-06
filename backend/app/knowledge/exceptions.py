@@ -59,3 +59,38 @@ class ChunkValidatorError(KnowledgeEngineError):
 class TokenEstimatorError(KnowledgeEngineError):
     """Raised when token estimation fails."""
     pass
+
+
+class EmbeddingGeneratorError(KnowledgeEngineError):
+    """Raised when local vector embedding generation fails."""
+    pass
+
+
+class EmbeddingBatcherError(KnowledgeEngineError):
+    """Raised when chunk batch grouping fails."""
+    pass
+
+
+class EmbeddingNormalizerError(KnowledgeEngineError):
+    """Raised when L2 vector normalization fails."""
+    pass
+
+
+class PayloadBuilderError(KnowledgeEngineError):
+    """Raised when Qdrant payload serialization fails."""
+    pass
+
+
+class QdrantClientWrapperError(KnowledgeEngineError):
+    """Raised when low-level Qdrant client operational calls fail."""
+    pass
+
+
+class CollectionManagerError(KnowledgeEngineError):
+    """Raised when Qdrant collection creation, inspection, or verification fails."""
+    pass
+
+
+class IndexManagerError(KnowledgeEngineError):
+    """Raised when full indexing pipeline orchestration fails."""
+    pass

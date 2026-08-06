@@ -1,4 +1,4 @@
-"""Ingestion, Knowledge Structuring, and Optimization Pipeline Coordinator."""
+"""Ingestion, Knowledge Structuring, Optimization, and Indexing Pipeline Coordinator."""
 
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
@@ -6,11 +6,13 @@ from typing import List, Optional, Tuple, Union
 from app.knowledge.analysis.hierarchy_builder import HierarchyBuilder
 from app.knowledge.analysis.statistics import StatisticsGenerator
 from app.knowledge.analysis.structure_analyzer import StructureAnalyzer
+from app.knowledge.indexing.index_manager import IndexManager
 from app.knowledge.ingestion.cleaner import TextCleaner
 from app.knowledge.ingestion.parser import DocumentParser
 from app.knowledge.metadata.metadata_builder import MetadataBuilder
 from app.knowledge.models.chunk_statistics import ChunkStatistics
 from app.knowledge.models.document import Document
+from app.knowledge.models.index_result import IndexResult
 from app.knowledge.models.knowledge_chunk import KnowledgeChunk
 from app.knowledge.models.structured_document import StructuredDocument
 from app.knowledge.optimization.chunk_optimizer import ChunkOptimizer
@@ -21,7 +23,7 @@ from app.utils.logging import logger
 
 
 class IngestionPipeline:
-    """Coordinates Phase 1 (Ingestion), Phase 2 (Knowledge Structuring), and Phase 3 (Knowledge Optimization) pipelines."""
+    """Coordinates Phase 1 (Ingestion), Phase 2 (Knowledge Structuring), Phase 3 (Knowledge Optimization), and Phase 4 (Knowledge Indexing) pipelines."""
 
     def __init__(
         self,
@@ -35,6 +37,7 @@ class IngestionPipeline:
         chunk_optimizer: Optional[ChunkOptimizer] = None,
         chunk_validator: Optional[ChunkValidator] = None,
         token_estimator: Optional[TokenEstimator] = None,
+        index_manager: Optional[IndexManager] = None,
     ):
         """Initializes pipeline components."""
         self.parser = parser or DocumentParser()
@@ -47,17 +50,10 @@ class IngestionPipeline:
         self.chunk_optimizer = chunk_optimizer or ChunkOptimizer()
         self.chunk_validator = chunk_validator or ChunkValidator()
         self.token_estimator = token_estimator or TokenEstimator()
+        self.index_manager = index_manager or IndexManager()
 
     def process_pdf(self, file_path: Union[str, Path], document_id: Optional[str] = None) -> Document:
-        """Executes Phase 1 ingestion pipeline on a PDF file: PDF -> Parser -> Cleaner -> Clean Document.
-
-        Args:
-            file_path (Union[str, Path]): Path to PDF file.
-            document_id (Optional[str]): Optional custom document UUID identifier.
-
-        Returns:
-            Document: Cleaned Document object.
-        """
+        """Executes Phase 1 ingestion pipeline on a PDF file: PDF -> Parser -> Cleaner -> Clean Document."""
         path = Path(file_path)
         logger.info(f"=== Starting Ingestion Pipeline (Phase 1) for '{path.name}' ===")
 
@@ -71,20 +67,7 @@ class IngestionPipeline:
         return clean_document
 
     def structure_document(self, clean_document: Document) -> StructuredDocument:
-        """Executes Phase 2 Knowledge Structuring pipeline on a Clean Document object.
-
-        Pipeline Steps:
-            1. Structure Analyzer -> Extract typed sections (headings, paragraphs, lists, tables) in reading order.
-            2. Hierarchy Builder -> Construct parent-child section relationships (H1 -> H2 -> H3 -> Paragraph).
-            3. Metadata Builder -> Enrich every section with document, page, type, level, and order metadata.
-            4. Statistics Generator -> Compute element counts and structural metrics.
-
-        Args:
-            clean_document (Document): Cleaned Document object from Phase 1.
-
-        Returns:
-            StructuredDocument: Fully structured document containing section list, hierarchy tree, and statistics.
-        """
+        """Executes Phase 2 Knowledge Structuring pipeline on a Clean Document object."""
         logger.info(f"=== Starting Knowledge Structuring Pipeline (Phase 2) for '{clean_document.filename}' ===")
 
         sections = self.analyzer.analyze(clean_document)
@@ -122,40 +105,21 @@ class IngestionPipeline:
         min_tokens: int = 30,
         overlap_tokens: int = 50,
     ) -> Tuple[List[KnowledgeChunk], ChunkStatistics]:
-        """Executes Phase 3 Knowledge Optimization pipeline on a StructuredDocument object.
-
-        Pipeline Steps:
-            1. Semantic Chunker -> Group document sections by semantic boundaries.
-            2. Chunk Optimizer -> Merge tiny chunks and split oversized chunks.
-            3. Chunk Validator -> Audit chunk constraints (non-empty, token budget, metadata).
-            4. Token Estimator -> Calculate estimated token counts.
-
-        Args:
-            structured_doc (StructuredDocument): Structured Document object from Phase 2.
-            max_tokens (int): Maximum token budget ceiling per chunk.
-            min_tokens (int): Minimum token threshold for merging small fragments.
-            overlap_tokens (int): Overlap token count between adjacent chunks.
-
-        Returns:
-            Tuple[List[KnowledgeChunk], ChunkStatistics]: Tuple of (valid_chunks, chunk_statistics).
-        """
+        """Executes Phase 3 Knowledge Optimization pipeline on a StructuredDocument object."""
         logger.info(f"=== Starting Knowledge Optimization Pipeline (Phase 3) for '{structured_doc.filename}' ===")
 
-        # Step 1: Semantic Chunker
         raw_chunks = self.semantic_chunker.chunk_document(
             structured_doc,
             max_tokens=max_tokens,
             overlap_tokens=overlap_tokens,
         )
 
-        # Step 2: Chunk Optimizer
         optimized_chunks = self.chunk_optimizer.optimize(
             raw_chunks,
             min_tokens=min_tokens,
             max_tokens=max_tokens,
         )
 
-        # Step 3 & 4: Chunk Validator & Token Estimator
         valid_chunks, chunk_stats = self.chunk_validator.validate_chunks(
             optimized_chunks,
             max_tokens=max_tokens,
@@ -167,16 +131,23 @@ class IngestionPipeline:
         )
         return valid_chunks, chunk_stats
 
+    def index_document_chunks(
+        self,
+        chunks: List[KnowledgeChunk],
+        document_name: Optional[str] = None,
+        recreate_collection: bool = False,
+    ) -> IndexResult:
+        """Executes Phase 4 Knowledge Indexing pipeline: Embedder -> Normalizer -> Payload -> Qdrant."""
+        logger.info(f"=== Starting Knowledge Indexing Pipeline (Phase 4) for {len(chunks)} chunks ===")
+        result = self.index_manager.index_chunks(
+            chunks=chunks,
+            document_name=document_name,
+            recreate_collection=recreate_collection,
+        )
+        return result
+
     def process_pdf_to_structured(self, file_path: Union[str, Path], document_id: Optional[str] = None) -> StructuredDocument:
-        """Executes full Phase 1 + Phase 2 pipeline on a PDF file.
-
-        Args:
-            file_path (Union[str, Path]): Path to PDF file.
-            document_id (Optional[str]): Optional custom document UUID.
-
-        Returns:
-            StructuredDocument: Fully structured document object.
-        """
+        """Executes Phase 1 + Phase 2 pipeline on a PDF file."""
         clean_doc = self.process_pdf(file_path, document_id=document_id)
         return self.structure_document(clean_doc)
 
@@ -186,18 +157,35 @@ class IngestionPipeline:
         document_id: Optional[str] = None,
         max_tokens: int = 512,
     ) -> Tuple[List[KnowledgeChunk], ChunkStatistics]:
-        """Executes full end-to-end pipeline (Phase 1 + 2 + 3) on a PDF file.
+        """Executes Phase 1 + 2 + 3 pipeline on a PDF file."""
+        structured_doc = self.process_pdf_to_structured(file_path, document_id=document_id)
+        return self.optimize_chunks(structured_doc, max_tokens=max_tokens)
+
+    def process_pdf_to_index(
+        self,
+        file_path: Union[str, Path],
+        document_id: Optional[str] = None,
+        max_tokens: int = 512,
+        recreate_collection: bool = False,
+    ) -> IndexResult:
+        """Executes full end-to-end pipeline (Phase 1 + 2 + 3 + 4) on a PDF file.
 
         Args:
             file_path (Union[str, Path]): Path to PDF file.
             document_id (Optional[str]): Optional custom document UUID.
-            max_tokens (int): Maximum token budget ceiling per chunk.
+            max_tokens (int): Max token budget ceiling per chunk.
+            recreate_collection (bool): Recreate collection before indexing.
 
         Returns:
-            Tuple[List[KnowledgeChunk], ChunkStatistics]: Tuple of (valid_chunks, chunk_statistics).
+            IndexResult: Indexing result object.
         """
-        structured_doc = self.process_pdf_to_structured(file_path, document_id=document_id)
-        return self.optimize_chunks(structured_doc, max_tokens=max_tokens)
+        path = Path(file_path)
+        chunks, _ = self.process_pdf_to_chunks(path, document_id=document_id, max_tokens=max_tokens)
+        return self.index_document_chunks(
+            chunks=chunks,
+            document_name=path.name,
+            recreate_collection=recreate_collection,
+        )
 
 
 def ingest_pdf(file_path: Union[str, Path], document_id: Optional[str] = None) -> Document:
@@ -217,6 +205,22 @@ def chunk_pdf(
     document_id: Optional[str] = None,
     max_tokens: int = 512,
 ) -> Tuple[List[KnowledgeChunk], ChunkStatistics]:
-    """Helper function to execute full end-to-end (Phase 1 + 2 + 3) chunking pipeline."""
+    """Helper function to execute Phase 1 + 2 + 3 chunking pipeline."""
     pipeline = IngestionPipeline()
     return pipeline.process_pdf_to_chunks(file_path, document_id=document_id, max_tokens=max_tokens)
+
+
+def index_pdf(
+    file_path: Union[str, Path],
+    document_id: Optional[str] = None,
+    max_tokens: int = 512,
+    recreate_collection: bool = False,
+) -> IndexResult:
+    """Helper function to execute full end-to-end (Phase 1 + 2 + 3 + 4) indexing pipeline."""
+    pipeline = IngestionPipeline()
+    return pipeline.process_pdf_to_index(
+        file_path,
+        document_id=document_id,
+        max_tokens=max_tokens,
+        recreate_collection=recreate_collection,
+    )

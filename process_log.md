@@ -243,6 +243,30 @@ This file records the development process, code changes, and rationale for all m
   - [test_knowledge_phase3.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_knowledge_phase3.py): Pytest unit test suite (**22/22 tests passed**).
 - **Rationale:** Strict adherence to Phase 3 boundaries without embeddings, vector databases, Qdrant, retrieval, LLMs, OpenRouter, or prompt engineering.
 
+---
+
+## 🔍 Step 17: Enterprise Knowledge Indexing Engine (Phase 4 Indexing)
+**Action:** Implemented Phase 4 Knowledge Indexing Engine generating local dense embeddings, L2 normalizing vectors, constructing Qdrant payloads, and uploading to Qdrant vector database.
+- **Created/Updated Files:**
+  - [config.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/config.py): Added `EMBEDDING_MODEL_NAME` (`BAAI/bge-small-en-v1.5`), `EMBEDDING_BATCH_SIZE` (`32`), `QDRANT_HOST` (`localhost`), `QDRANT_PORT` (`6333`), `QDRANT_COLLECTION_NAME` (`company_knowledge`), and `QDRANT_DISTANCE_METRIC` (`Cosine`).
+  - [requirements.txt](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/requirements.txt): Added `sentence-transformers>=3.0.0`, `qdrant-client>=1.10.0`, `numpy>=1.26.0`.
+  - [exceptions.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/exceptions.py): Added `EmbeddingGeneratorError`, `EmbeddingBatcherError`, `EmbeddingNormalizerError`, `PayloadBuilderError`, `QdrantClientWrapperError`, `CollectionManagerError`, and `IndexManagerError`.
+  - [embedding.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/embedding.py): `Embedding` domain model (`chunk_id`, `vector`, `dimension`, `normalized`).
+  - [indexed_chunk.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/indexed_chunk.py): `IndexedChunk` model combining `Embedding` and Qdrant payload dictionary.
+  - [index_result.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/index_result.py): `IndexResult` model (`documents_indexed`, `chunks_indexed`, `vectors_uploaded`, `collection_name`, `embedding_dimension`, `processing_time`).
+  - [embedder.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/indexing/embedder.py): `EmbeddingGenerator` using SentenceTransformers (`BAAI/bge-small-en-v1.5`) loaded as a singleton for fast local batch vector inference.
+  - [embedding_batcher.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/indexing/embedding_batcher.py): `EmbeddingBatcher` grouping chunks into configurable batches (default 32).
+  - [embedding_normalizer.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/indexing/embedding_normalizer.py): `EmbeddingNormalizer` computing L2 unit-length vector normalization using NumPy.
+  - [payload_builder.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/indexing/payload_builder.py): `PayloadBuilder` constructing comprehensive Qdrant payloads with all chunk, section, and document metadata.
+  - [qdrant_client.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/indexing/qdrant_client.py): `QdrantClientWrapper` handling Qdrant connection, fallback local storage engine, collection creation, point upserting, deletion, and collection statistics.
+  - [collection_manager.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/indexing/collection_manager.py): `CollectionManager` managing collection creation and schema/dimension validation for `company_knowledge`.
+  - [index_manager.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/indexing/index_manager.py): `IndexManager` orchestrating full indexing pipeline and returning `IndexResult`.
+  - [ingest.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/ingestion/ingest.py): Updated `IngestionPipeline` with `index_document_chunks()` and `index_pdf()` methods.
+  - [test_indexing.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/test_indexing.py): Terminal test script printing embedding model, dimension, batch count, embedding time, collection status, uploaded vectors, and sample payload.
+  - [test_knowledge_phase4.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_knowledge_phase4.py): Pytest unit test suite (**27/27 tests passed**).
+- **Rationale:** Strict adherence to Phase 4 boundaries without retrieval, RAG, question answering, prompt engineering, OpenRouter, FastAPI endpoints, or search APIs.
+
+
 
 
 

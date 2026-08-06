@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     UPLOAD_DIR: Path = BASE_DIR / "data" / "uploads"
     LOG_DIR: Path = BASE_DIR / "logs"
 
+    # Knowledge Indexing & Vector DB Configuration
+    EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
+    EMBEDDING_BATCH_SIZE: int = 32
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
+    QDRANT_COLLECTION_NAME: str = "company_knowledge"
+    QDRANT_DISTANCE_METRIC: str = "Cosine"
+    QDRANT_STORAGE_PATH: str = "./qdrant_storage"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
