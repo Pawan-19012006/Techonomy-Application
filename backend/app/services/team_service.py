@@ -1,86 +1,100 @@
-from typing import List, Optional, Tuple
+"""Service handling team registration, arena entry, and prompt log tracking."""
+
+from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from app.database.models import PromptLogModel, TeamModel
-from app.schemas.team import TeamQuestionMetricsResponse, TeamUsageResponse
+from app.database.models import PromptLogModel, TeamModel, utc_now
+from app.utils.logging import logger
 
 
 class TeamService:
-    """Service handling Team information, history, and usage metrics."""
+    """Service isolating team arena management and prompt log database operations."""
 
     @staticmethod
-    def get_team_by_id(db: Session, team_id: int) -> Optional[TeamModel]:
-        """Retrieves a Team by ID.
+    def join_team(db: Session, team_name: str, member_names: List[str]) -> TeamModel:
+        """Joins or registers an event team.
+
+        If team already exists, returns the existing record.
+        If team does not exist, creates new team record with current timestamp as started_at.
 
         Args:
             db: Database session.
-            team_id: Primary key ID of the team.
+            team_name: Unique team name identifier.
+            member_names: List of member names.
 
         Returns:
-            Optional[TeamModel]: Database record or None.
+            TeamModel: Created or existing team database record.
         """
-        return db.query(TeamModel).filter(TeamModel.id == team_id).first()
+        clean_name = team_name.strip()
+        existing_team = db.query(TeamModel).filter(TeamModel.team_name == clean_name).first()
+
+        if existing_team:
+            logger.info(f"Team '{clean_name}' re-entering arena. Returning existing team record.")
+            return existing_team
+
+        logger.info(f"Creating new event team '{clean_name}' with members: {member_names}")
+        new_team = TeamModel(
+            team_name=clean_name,
+            member_names=member_names,
+            started_at=utc_now(),
+        )
+        db.add(new_team)
+        db.commit()
+        db.refresh(new_team)
+        return new_team
 
     @staticmethod
-    def get_team_usage(team: TeamModel) -> TeamUsageResponse:
-        """Calculates remaining questions and usage metrics for a Team.
+    def get_team(db: Session, team_name: str) -> Optional[TeamModel]:
+        """Retrieves team record by team_name primary key.
 
         Args:
-            team: Team database instance.
+            db: Database session.
+            team_name: Target team name.
 
         Returns:
-            TeamUsageResponse: Usage statistics.
+            Optional[TeamModel]: Team database record if found, else None.
         """
-        remaining = max(0, team.question_limit - team.questions_used)
-        return TeamUsageResponse(
-            team_id=team.id,
-            question_limit=team.question_limit,
-            questions_used=team.questions_used,
-            remaining_questions=remaining
+        return db.query(TeamModel).filter(TeamModel.team_name == team_name.strip()).first()
+
+    @staticmethod
+    def get_team_prompts(db: Session, team_name: str) -> List[PromptLogModel]:
+        """Retrieves all prompt log entries submitted by a specific team.
+
+        Args:
+            db: Database session.
+            team_name: Target team name.
+
+        Returns:
+            List[PromptLogModel]: List of prompt logs for the team.
+        """
+        return (
+            db.query(PromptLogModel)
+            .filter(PromptLogModel.team_name == team_name.strip())
+            .order_by(PromptLogModel.created_at.asc())
+            .all()
         )
 
     @staticmethod
-    def get_team_questions(team: TeamModel) -> TeamQuestionMetricsResponse:
-        """Returns question limit, used, and remaining metrics for a Team.
+    def log_prompt(db: Session, team_name: str, prompt: str, response: str) -> PromptLogModel:
+        """Records a successful RAG prompt log entry associated with a team.
 
         Args:
-            team: Team database instance.
+            db: Database session.
+            team_name: Submitting team name.
+            prompt: User question prompt.
+            response: RAG response text.
 
         Returns:
-            TeamQuestionMetricsResponse: Breakdown of question quota.
+            PromptLogModel: Persisted prompt log record.
         """
-        remaining = max(0, team.question_limit - team.questions_used)
-        return TeamQuestionMetricsResponse(
-            question_limit=team.question_limit,
-            questions_used=team.questions_used,
-            questions_remaining=remaining
+        log_entry = PromptLogModel(
+            team_name=team_name.strip(),
+            prompt=prompt,
+            response=response,
+            created_at=utc_now(),
         )
-
-    @staticmethod
-    def get_team_history(db: Session, team_id: int, limit: int = 100) -> Tuple[List[PromptLogModel], int]:
-        """Retrieves query prompt execution history for a Team.
-
-        Args:
-            db: Database session.
-            team_id: Team ID.
-            limit: Query return limit.
-
-        Returns:
-            Tuple[List[PromptLogModel], int]: List of prompt log entries and total count.
-        """
-        query = db.query(PromptLogModel).filter(PromptLogModel.team_id == team_id)
-        total = query.count()
-        logs = query.order_by(PromptLogModel.created_at.desc()).limit(limit).all()
-        return logs, total
-
-    @staticmethod
-    def list_all_teams(db: Session) -> List[TeamModel]:
-        """Lists all registered Teams in the system (Admin operation).
-
-        Args:
-            db: Database session.
-
-        Returns:
-            List[TeamModel]: List of all teams.
-        """
-        return db.query(TeamModel).order_by(TeamModel.created_at.desc()).all()
+        db.add(log_entry)
+        db.commit()
+        db.refresh(log_entry)
+        logger.info(f"Logged prompt entry #{log_entry.id} for Team '{team_name}'")
+        return log_entry

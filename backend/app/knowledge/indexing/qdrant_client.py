@@ -284,13 +284,89 @@ class QdrantClientWrapper:
             raise QdrantClientWrapperError(f"Failed to fetch info for '{collection_name}': {str(e)}") from e
 
     def count_vectors(self, collection_name: str) -> int:
-        """Returns aggregate vector count in a collection.
+        """Returns aggregate exact vector count in a collection.
 
         Args:
             collection_name (str): Target collection name.
 
         Returns:
-            int: Vector count.
+            int: Exact vector point count.
         """
-        info = self.collection_info(collection_name)
-        return info.get("vectors_count") or info.get("points_count") or 0
+        client = self.connect()
+        try:
+            res = client.count(collection_name=collection_name, exact=True)
+            return res.count
+        except Exception:
+            info = self.collection_info(collection_name)
+            return info.get("points_count") or info.get("vectors_count") or 0
+
+    def get_indexed_documents(self, collection_name: str) -> List[str]:
+        """Retrieves list of distinct document names stored in collection payloads.
+
+        Args:
+            collection_name (str): Target collection name.
+
+        Returns:
+            List[str]: Sorted list of unique document names.
+        """
+        client = self.connect()
+        try:
+            records, _ = client.scroll(
+                collection_name=collection_name,
+                limit=500,
+                with_payload=True,
+                with_vectors=False,
+            )
+            doc_names = set()
+            for rec in records:
+                payload = rec.payload or {}
+                name = (
+                    payload.get("document_name")
+                    or payload.get("metadata", {}).get("filename")
+                    or payload.get("document_id")
+                )
+                if name:
+                    doc_names.add(name)
+            return sorted(list(doc_names))
+        except Exception as e:
+            logger.warning(f"Could not fetch indexed documents for '{collection_name}': {e}")
+            return []
+
+    def get_sample_points(self, collection_name: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Retrieves sample points with document name, chunk_id, and section payload info.
+
+        Args:
+            collection_name (str): Target collection name.
+            limit (int): Max sample points to retrieve (default 10).
+
+        Returns:
+            List[Dict[str, Any]]: List of sample point dictionaries.
+        """
+        client = self.connect()
+        try:
+            records, _ = client.scroll(
+                collection_name=collection_name,
+                limit=limit,
+                with_payload=True,
+                with_vectors=False,
+            )
+            points_info = []
+            for rec in records:
+                payload = rec.payload or {}
+                points_info.append(
+                    {
+                        "point_id": str(rec.id),
+                        "chunk_id": payload.get("chunk_id", str(rec.id)),
+                        "document_name": (
+                            payload.get("document_name")
+                            or payload.get("document_id")
+                            or "Unknown"
+                        ),
+                        "section_title": payload.get("section_title", "Untitled"),
+                        "page_numbers": payload.get("page_numbers", []),
+                    }
+                )
+            return points_info
+        except Exception as e:
+            logger.warning(f"Could not fetch sample points for '{collection_name}': {e}")
+            return []

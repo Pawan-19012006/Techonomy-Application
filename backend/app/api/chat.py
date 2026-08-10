@@ -1,54 +1,71 @@
-import time
+"""API router handling RAG chat requests and team prompt logging."""
+
 from typing import Annotated
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_team
-from app.database.models import TeamModel
 from app.database.sqlite import get_db
-from app.schemas.chat import ChatQueryRequest, ChatQueryResponse
-from app.services.analytics import AnalyticsService
-from app.services.rate_limit import RateLimiterService
+from app.knowledge.rag.chat_service import ChatService
+from app.schemas.chat import ChatQueryRequest, ChatRequest, ChatResponse
+from app.services.team_service import TeamService
+from app.utils.logging import logger
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
-@router.post("/query", response_model=ChatQueryResponse, summary="Submit Chat Query Prompt (Placeholder Interface)")
+@router.post("", response_model=ChatResponse, summary="Submit RAG Chat Question")
+@router.post("/query", response_model=ChatResponse, summary="Submit RAG Chat Question")
 async def process_chat_query(
     payload: ChatQueryRequest,
-    current_team: Annotated[TeamModel, Depends(get_current_team)],
-    db: Annotated[Session, Depends(get_db)]
-) -> ChatQueryResponse:
-    """Processes a user prompt query (Placeholder interface without AI processing).
+    db: Annotated[Session, Depends(get_db)],
+) -> ChatResponse:
+    """Executes RAG chat pipeline and records prompt log for the team.
 
-    Validates quota, consumes 1 usage token, measures processing time, logs prompt, and returns placeholder text.
+    Pipeline:
+        1. Extract team_name and question text.
+        2. Verify team exists (auto-register if missing).
+        3. Call ChatService.ask_async() -> Retrieval + Prompt Building + LLM Generation.
+        4. Store prompt log in prompt_logs table.
+        5. Return ChatResponse JSON (answer, sources, team_name).
     """
-    start_time = time.time()
+    question_text = payload.get_question_text()
+    if not question_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Question text cannot be empty.",
+        )
 
-    # Verify rate limit / question quota
-    RateLimiterService.verify_quota(current_team)
+    team_name = (payload.team_name or "TEAM-01").strip()
 
-    # Consume quota
-    RateLimiterService.consume_quota(db, current_team)
+    # Ensure team exists or auto-join
+    team = TeamService.get_team(db=db, team_name=team_name)
+    if not team:
+        team = TeamService.join_team(db=db, team_name=team_name, member_names=[team_name])
 
-    placeholder_response = (
-        f"Received query: '{payload.query}'. "
-        "Backend foundation layer active. AI/RAG engine pending implementation."
-    )
+    chat_service = ChatService()
 
-    elapsed_ms = (time.time() - start_time) * 1000.0
+    try:
+        # Step 3: Execute ChatService RAG pipeline
+        chat_result = await chat_service.ask_async(query=question_text)
 
-    # Audit log prompt
-    AnalyticsService.log_prompt(
-        db=db,
-        team_id=current_team.id,
-        prompt=payload.query,
-        response=placeholder_response,
-        status_code=200,
-        response_time_ms=elapsed_ms
-    )
+        # Step 4: Record prompt log in SQLite database
+        TeamService.log_prompt(
+            db=db,
+            team_name=team.team_name,
+            prompt=question_text,
+            response=chat_result.answer,
+        )
 
-    return ChatQueryResponse(
-        query=payload.query,
-        response=placeholder_response
-    )
+        # Step 5: Return ChatResponse
+        return ChatResponse(
+            answer=chat_result.answer,
+            sources=chat_result.sources,
+            team_name=team.team_name,
+        )
+
+    except Exception as e:
+        logger.error(f"Chat processing failed for Team '{team_name}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chat generation failed: {str(e)}",
+        ) from e

@@ -1,38 +1,78 @@
-from typing import Annotated
-from fastapi import APIRouter, Depends
+"""API router handling Team arena entry, team details, and prompt history endpoints."""
+
+from typing import Annotated, List
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_team
-from app.database.models import TeamModel
 from app.database.sqlite import get_db
-from app.schemas.team import TeamHistoryResponse, TeamQuestionMetricsResponse, TeamResponse
+from app.schemas.team import PromptLogResponse, TeamJoinRequest, TeamResponse
 from app.services.team_service import TeamService
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
 
-@router.get("/me", response_model=TeamResponse, summary="Get Current Team Details")
-async def get_team_info(
-    current_team: Annotated[TeamModel, Depends(get_current_team)]
-) -> TeamModel:
-    """Returns profile information for the currently authenticated Team."""
-    return current_team
-
-
-@router.get("/questions", response_model=TeamQuestionMetricsResponse, summary="Get Team Question Quota Breakdown")
-async def get_team_questions(
-    current_team: Annotated[TeamModel, Depends(get_current_team)]
-) -> TeamQuestionMetricsResponse:
-    """Returns question quota, used, and remaining question count for the authenticated Team."""
-    return TeamService.get_team_questions(current_team)
-
-
-@router.get("/history", response_model=TeamHistoryResponse, summary="Get Team Prompt Execution History")
-async def get_team_history(
-    current_team: Annotated[TeamModel, Depends(get_current_team)],
+@router.post("/join", response_model=TeamResponse, status_code=status.HTTP_200_OK, summary="Join or Enter Arena")
+async def join_team(
+    payload: TeamJoinRequest,
     db: Annotated[Session, Depends(get_db)],
-    limit: int = 100
-) -> TeamHistoryResponse:
-    """Returns prompt query execution history for the authenticated Team."""
-    logs, total = TeamService.get_team_history(db, current_team.id, limit=limit)
-    return TeamHistoryResponse(logs=logs, total_count=total)
+) -> TeamResponse:
+    """Joins or registers an event team.
+
+    Behavior:
+        - If team does not exist: Creates the team, records started_at, and returns team info.
+        - If team already exists: Returns existing team record without duplicate creation.
+    """
+    team = TeamService.join_team(
+        db=db,
+        team_name=payload.team_name,
+        member_names=payload.member_names,
+    )
+    return TeamResponse(
+        team_name=team.team_name,
+        member_names=team.member_names,
+        started_at=team.started_at,
+    )
+
+
+@router.get("/{team_name}", response_model=TeamResponse, summary="Get Team Info")
+async def get_team(
+    team_name: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> TeamResponse:
+    """Retrieves team information including member names and started_at timestamp."""
+    team = TeamService.get_team(db=db, team_name=team_name)
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Team '{team_name}' not found.",
+        )
+    return TeamResponse(
+        team_name=team.team_name,
+        member_names=team.member_names,
+        started_at=team.started_at,
+    )
+
+
+@router.get("/{team_name}/prompts", response_model=List[PromptLogResponse], summary="Get Team Prompt History")
+async def get_team_prompts(
+    team_name: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> List[PromptLogResponse]:
+    """Retrieves all prompt logs submitted by a specific team."""
+    team = TeamService.get_team(db=db, team_name=team_name)
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Team '{team_name}' not found.",
+        )
+
+    prompts = TeamService.get_team_prompts(db=db, team_name=team_name)
+    return [
+        PromptLogResponse(
+            id=p.id,
+            prompt=p.prompt,
+            response=p.response,
+            created_at=p.created_at,
+        )
+        for p in prompts
+    ]

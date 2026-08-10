@@ -139,11 +139,14 @@ def test_full_phase5_retrieval_pipeline(tmp_path: Path):
     pdf_file = tmp_path / "test_retrieval_sample.pdf"
     generate_structured_sample_pdf(pdf_file)
 
-    # Index document first
-    index_pdf(pdf_file, recreate_collection=True)
+    test_col = "pytest_unit_test_collection"
+    # Index document first into test collection
+    index_pdf(pdf_file, recreate_collection=True, collection_name=test_col)
 
-    # Execute retrieval
-    res = retrieve_context("What is the corporate report about?", top_k=5, top_n=3)
+    # Execute retrieval against test collection
+    v_search = VectorSearch(collection_name=test_col)
+    pipeline = RetrievalPipeline(vector_search=v_search)
+    res = pipeline.retrieve("What is the corporate report about?", top_k=5, top_n=3)
 
     assert isinstance(res, RetrievalResult)
     assert res.processed_query.is_valid is True

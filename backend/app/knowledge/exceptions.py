@@ -129,3 +129,29 @@ class ContextBuilderError(KnowledgeEngineError):
 class RetrievalPipelineError(KnowledgeEngineError):
     """Raised when full retrieval pipeline orchestration fails."""
     pass
+
+
+class PromptBuilderError(KnowledgeEngineError):
+    """Raised when prompt construction or template formatting fails."""
+    pass
+
+
+class LLMServiceError(KnowledgeEngineError):
+    """Base exception for all LLM generation operational failures."""
+    pass
+
+
+class OpenRouterAPIError(LLMServiceError):
+    """Raised when OpenRouter API encounters HTTP, authentication, or payload errors."""
+    pass
+
+
+class LLMTimeoutError(LLMServiceError):
+    """Raised when OpenRouter API call times out after configured threshold."""
+    pass
+
+
+class ChatServiceError(KnowledgeEngineError):
+    """Raised when ChatService orchestration fails."""
+    pass
+

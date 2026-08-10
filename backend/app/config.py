@@ -4,30 +4,22 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Central configuration for the Techonomy backend application.
-
-    Loads values from environment variables or .env file with default fallbacks.
-    """
+    """Central configuration for Techonomy Event backend application."""
 
     # Application Configuration
-    PROJECT_NAME: str = "Techonomy"
-    VERSION: str = "0.1.0"
+    PROJECT_NAME: str = "Techonomy Knowledge Intelligence Platform"
+    VERSION: str = "1.0.0"
     DEBUG: bool = True
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     API_PREFIX: str = "/api"
 
+    # Event Configuration
+    EVENT_DURATION_MINUTES: int = 60
+
     # Database Configuration
     DATABASE_URL: str = "sqlite:///./techonomy.db"
     SQL_ECHO: bool = False
-
-    # Security Configuration
-    JWT_SECRET: str = "temporary-development-jwt-secret-key-change-in-production"
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
-
-    # Rate Limiting & Quotas
-    DEFAULT_QUESTION_LIMIT: int = 10
 
     # Logging & Storage Paths
     LOG_LEVEL: str = "INFO"
@@ -50,6 +42,13 @@ class Settings(BaseSettings):
     RETRIEVAL_CONTEXT_TOKEN_BUDGET: int = 2000
     RETRIEVAL_MINIMUM_SIMILARITY: float = 0.3
 
+    # OpenRouter & LLM Configuration
+    OPENROUTER_API_KEY: str = "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"
+    OPENROUTER_MODEL: str = "cohere/north-mini-code:free"
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    LLM_TIMEOUT_SECONDS: float = 30.0
+    LLM_MAX_RETRIES: int = 1
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
@@ -59,11 +58,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Returns a cached instance of application settings.
-
-    Returns:
-        Settings: Application configuration instance.
-    """
+    """Returns cached instance of application settings."""
     return Settings()
 
 

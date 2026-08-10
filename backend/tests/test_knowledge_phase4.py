@@ -134,7 +134,12 @@ def test_full_phase4_indexing_pipeline(tmp_path: Path):
     pdf_file = tmp_path / "test_indexing_sample.pdf"
     generate_structured_sample_pdf(pdf_file)
 
-    res = index_pdf(pdf_file, max_tokens=512, recreate_collection=True)
+    res = index_pdf(
+        pdf_file,
+        max_tokens=512,
+        recreate_collection=True,
+        collection_name="pytest_unit_test_collection",
+    )
 
     assert isinstance(res, IndexResult)
     assert res.documents_indexed == 1

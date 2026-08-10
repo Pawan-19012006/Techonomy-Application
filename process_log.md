@@ -288,6 +288,58 @@ This file records the development process, code changes, and rationale for all m
   - [test_knowledge_phase5.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_knowledge_phase5.py): Pytest unit test suite (**33/33 tests passed**).
 - **Rationale:** Strict adherence to Phase 5 boundaries without LLM calls, OpenRouter, prompt engineering, chatbot, FastAPI endpoints, or frontend integration.
 
+---
+
+## 🛠️ Step 19: Phase 5 Debugging Sprint – Qdrant Persistence & Retrieval Audit
+**Action:** Audited and resolved Qdrant database persistence inconsistency between indexing and retrieval pipelines.
+- **Created/Updated Files:**
+  - [qdrant_client.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/indexing/qdrant_client.py): Enhanced `count_vectors()` to use `client.count(exact=True)`. Added `get_indexed_documents()` and `get_sample_points()` inspection methods.
+  - [debug_qdrant.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/debug_qdrant.py): Created new CLI debug utility displaying Collection Name, Storage Path, Total Points, First 10 Document Names, and First 10 Chunk IDs.
+  - [test_knowledge_phase4.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_knowledge_phase4.py) & [test_knowledge_phase5.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_knowledge_phase5.py): Updated unit tests to run against an isolated collection (`pytest_unit_test_collection`), preventing unit tests from wiping the local production `./qdrant_storage` database.
+  - [test_retrieval.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/test_retrieval.py): Enforced indexing of `annual_report.pdf` when `company_knowledge` is empty or lacks production vectors. Added audit logging for storage path, collection name, total vectors, indexed document names, and retrieved document names.
+- **Rationale:** Guaranteed that Retrieval searches the exact same vector database (`annual_report.pdf`, 442 vectors) produced by Phase 4 without sample document interference.
+
+---
+
+## 🚀 Step 20: Enterprise RAG Serving Pipeline (Phase 6 RAG Engine)
+**Action:** Implemented the production RAG serving pipeline consisting of `PromptBuilder`, `LLMService`, `ChatService`, `ChatResponse` schemas, and `POST /chat` API endpoint.
+- **Created/Updated Files:**
+  - [config.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/config.py): Added `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_BASE_URL`, `LLM_TIMEOUT_SECONDS` (`30.0`), and `LLM_MAX_RETRIES` (`1`).
+  - [exceptions.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/exceptions.py): Added `PromptBuilderError`, `LLMServiceError`, `OpenRouterAPIError`, `LLMTimeoutError`, and `ChatServiceError`.
+  - [system_prompt.txt](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/prompts/system_prompt.txt): Populated system prompt text file.
+  - [prompt_builder.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/rag/prompt_builder.py): `PromptBuilder` assembling system message, retrieved context chunks, and user question. Re-exported in `app/prompts/prompt_builder.py`.
+  - [llm_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/rag/llm_service.py): `LLMService` handling OpenRouter API generation calls, 30s timeout enforcement, 1 retry resilience, and custom error raising.
+  - [chat_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/rag/chat_service.py): `ChatService` orchestrating end-to-end RAG question answering: `RetrievalPipeline` -> `PromptBuilder` -> `LLMService` -> `ChatServiceResult` (never accessing Qdrant, generating embeddings, or performing auth directly).
+  - [chat.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/schemas/chat.py): Pydantic schemas (`SourceItem`, `ChatRequest`, `ChatResponse`, `ChatQueryRequest`, `ChatQueryResponse`).
+  - [chat.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/chat.py): Implemented 6-step `POST /chat` and `POST /chat/query` endpoint pipeline (Authenticate -> Check Quota -> `ChatService.ask()` -> Log Prompt -> Consume Quota -> Return JSON).
+  - [test_rag.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/test_rag.py): Terminal test script verifying `PromptBuilder`, `LLMService`, and `ChatService`.
+  - [test_rag_pipeline.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/tests/test_rag_pipeline.py): Automated Pytest unit test suite (**40/40 tests passed**).
+- **Rationale:** Strict adherence to single-responsibility RAG architecture reusing existing components without modifying ingestion, indexing, retrieval, auth, or quota modules.
+
+---
+
+## ⚡ Step 21: Event Backend Simplification & Auth Removal
+**Action:** Drastically simplified Techonomy backend for event execution by removing all enterprise auth, user accounts, JWT, password hashing, admin roles, and rate limiting while keeping the full RAG pipeline intact.
+- **Removed Obsolete Modules:**
+  - Deleted `app/auth/` directory (`jwt.py`, `password.py`, `dependencies.py`).
+  - Deleted obsolete routers (`admin.py`, `auth.py`, `dashboard.py`, `documents.py`, `event.py`, `history.py`).
+  - Deleted obsolete services (`authentication.py`, `rate_limit.py`, `dashboard_service.py`, `event_service.py`, `timer_service.py`, `analytics.py`, `document_service.py`).
+  - Deleted obsolete schemas (`admin.py`, `auth.py`, `dashboard.py`, `document.py`, `event.py`).
+- **Database Simplification:**
+  - Reduced SQLite database schema to **ONLY 2 tables**:
+    1. `teams` (`team_name` PK, `member_names` JSON, `started_at` DateTime).
+    2. `prompt_logs` (`id` PK, `team_name` FK $\rightarrow$ `teams.team_name`, `prompt`, `response`, `created_at`).
+- **APIs Implemented:**
+  - `POST /api/teams/join`: Joins or re-enters arena (`team_name`, `member_names`), setting `started_at` for new teams or returning existing team record.
+  - `GET /api/teams/{team_name}`: Returns team name, member names, and `started_at` timestamp.
+  - `POST /api/chat`: Receives `team_name` and `question`, delegates RAG generation to `ChatService`, stores prompt log in `prompt_logs`, and returns answer JSON.
+  - `GET /api/teams/{team_name}/prompts`: Returns prompt history list for a team.
+- **Verification:**
+  - Updated Pytest suite in `tests/test_event_backend.py` (**43/43 tests passed 100%**).
+
+
+
+
 
 
 

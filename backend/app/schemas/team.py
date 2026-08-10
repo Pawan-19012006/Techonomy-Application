@@ -1,55 +1,30 @@
+"""Pydantic schemas for Team API requests and responses."""
+
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, EmailStr, ConfigDict
-
-from app.schemas.admin import PromptLogResponse
+from typing import List
+from pydantic import BaseModel, Field
 
 
-class TeamCreate(BaseModel):
-    """Schema for registering a new Team account."""
+class TeamJoinRequest(BaseModel):
+    """Payload schema for joining an event arena."""
 
-    name: str
-    email: EmailStr
-    password: str
-    question_limit: int = 10
-    is_admin: bool = False
+    team_name: str = Field(..., description="Unique team identifier name", min_length=1, max_length=100)
+    member_names: List[str] = Field(..., description="List of team member full names", min_length=1)
+
 
 
 class TeamResponse(BaseModel):
-    """Public response schema for Team details."""
+    """Response schema representing an active event team."""
 
-    id: int
-    name: str
-    email: EmailStr
-    question_limit: int
-    questions_used: int
-    is_admin: bool
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
+    team_name: str = Field(..., description="Team name primary key")
+    member_names: List[str] = Field(..., description="List of member names")
+    started_at: datetime = Field(..., description="Timestamp when team started arena session")
 
 
-class TeamUsageResponse(BaseModel):
-    """Schema for querying Team question usage metrics."""
+class PromptLogResponse(BaseModel):
+    """Response schema for prompt execution log entry."""
 
-    team_id: int
-    question_limit: int
-    questions_used: int
-    remaining_questions: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class TeamQuestionMetricsResponse(BaseModel):
-    """Detailed question usage response model for GET /team/questions."""
-
-    question_limit: int
-    questions_used: int
-    questions_remaining: int
-
-
-class TeamHistoryResponse(BaseModel):
-    """Response payload for Team prompt execution history."""
-
-    logs: List[PromptLogResponse]
-    total_count: int
+    id: int = Field(..., description="Prompt log ID")
+    prompt: str = Field(..., description="Submitted question prompt")
+    response: str = Field(..., description="Generated RAG answer text")
+    created_at: datetime = Field(..., description="Submission timestamp")

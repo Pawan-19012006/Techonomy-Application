@@ -1,18 +1,28 @@
 # ==========================================
+# Environment Variables & Secrets
+# ==========================================
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.cert
+
+# ==========================================
 # Node.js & Frontend Build Outputs
 # ==========================================
 node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
-.env
-.env.local
-.env.*.local
 frontend/.env
 frontend/.env.local
+.eslintcache
+.npm/
 
 # ==========================================
-# Python
+# Python & Caching
 # ==========================================
 __pycache__/
 *.py[cod]
@@ -21,6 +31,12 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+build/
+dist/
 
 # ==========================================
 # Virtual Environments
@@ -28,37 +44,55 @@ htmlcov/
 .venv/
 venv/
 env/
+ENV/
 backend/.venv/
 backend/venv/
+backend/env/
 
 # ==========================================
-# IDEs & Editor Configuration
-# ==========================================
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# ==========================================
-# Operating System
-# ==========================================
-.DS_Store
-
-# ==========================================
-# Databases (SQLite & Qdrant local storage)
+# Databases & Vector DB Local Storage
 # ==========================================
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
 *.sqlite3
+techonomy.db
 backend/techonomy.db
 qdrant_storage/
 backend/qdrant_storage/
+storage/
 
 # ==========================================
-# Runtime Logs & App Data
+# Runtime Logs & Upload Data
 # ==========================================
 logs/
 *.log
 backend/logs/
 backend/data/uploads/
 backend/data/exports/
-backend/data/documents/
+
+# ==========================================
+# IDEs & Editors
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# ==========================================
+# Operating System Files
+# ==========================================
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# ==========================================
+# Agent & Assistant Metadata
+# ==========================================
+.gemini/
+.agents/

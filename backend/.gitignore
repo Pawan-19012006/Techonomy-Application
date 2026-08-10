@@ -1,83 +1,62 @@
 # ==========================================
-# Python
+# Python Runtime & Caching
 # ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+build/
+dist/
 
-# Virtual Environment
+# ==========================================
+# Virtual Environments
+# ==========================================
 .venv/
 venv/
 env/
 
 # ==========================================
-# Environment Variables
+# Environment Variables & Credentials
 # ==========================================
 .env
+.env.*
+!.env.example
+*.env
 
 # ==========================================
-# IDE
+# Databases & Vector DB Storage
 # ==========================================
-.vscode/
-.idea/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+techonomy.db
+qdrant_storage/
+storage/
 
 # ==========================================
-# macOS
-# ==========================================
-.DS_Store
-
-# ==========================================
-# Logs
+# Runtime Uploads, Exports, and Logs
 # ==========================================
 logs/
 *.log
-
-# ==========================================
-# Testing
-# ==========================================
-.pytest_cache/
-.coverage
-htmlcov/
-
-# ==========================================
-# Build
-# ==========================================
-build/
-dist/
-*.egg-info/
-
-# ==========================================
-# Jupyter
-# ==========================================
-.ipynb_checkpoints/
-
-# ==========================================
-# SQLite
-# ==========================================
-*.db
-*.sqlite3
-
-# ==========================================
-# Qdrant
-# ==========================================
-qdrant_storage/
-storage/embeddings/
-storage/snapshots/
-
-# ==========================================
-# Uploaded Documents / Runtime Data
-# ==========================================
 data/uploads/
 data/exports/
-data/documents/
 
 # ==========================================
-# Docker
+# IDEs & Operating System
 # ==========================================
-docker-compose.override.yml
-
-# ==========================================
-# Misc
-# ==========================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
 *.swp
 *.swo

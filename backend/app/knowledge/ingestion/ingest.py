@@ -136,10 +136,14 @@ class IngestionPipeline:
         chunks: List[KnowledgeChunk],
         document_name: Optional[str] = None,
         recreate_collection: bool = False,
+        collection_name: Optional[str] = None,
     ) -> IndexResult:
         """Executes Phase 4 Knowledge Indexing pipeline: Embedder -> Normalizer -> Payload -> Qdrant."""
         logger.info(f"=== Starting Knowledge Indexing Pipeline (Phase 4) for {len(chunks)} chunks ===")
-        result = self.index_manager.index_chunks(
+        idx_mgr = self.index_manager
+        if collection_name and collection_name != idx_mgr.collection_name:
+            idx_mgr = IndexManager(collection_name=collection_name)
+        result = idx_mgr.index_chunks(
             chunks=chunks,
             document_name=document_name,
             recreate_collection=recreate_collection,
@@ -167,6 +171,7 @@ class IngestionPipeline:
         document_id: Optional[str] = None,
         max_tokens: int = 512,
         recreate_collection: bool = False,
+        collection_name: Optional[str] = None,
     ) -> IndexResult:
         """Executes full end-to-end pipeline (Phase 1 + 2 + 3 + 4) on a PDF file.
 
@@ -175,6 +180,7 @@ class IngestionPipeline:
             document_id (Optional[str]): Optional custom document UUID.
             max_tokens (int): Max token budget ceiling per chunk.
             recreate_collection (bool): Recreate collection before indexing.
+            collection_name (Optional[str]): Target Qdrant collection name.
 
         Returns:
             IndexResult: Indexing result object.
@@ -185,6 +191,7 @@ class IngestionPipeline:
             chunks=chunks,
             document_name=path.name,
             recreate_collection=recreate_collection,
+            collection_name=collection_name,
         )
 
 
@@ -215,6 +222,7 @@ def index_pdf(
     document_id: Optional[str] = None,
     max_tokens: int = 512,
     recreate_collection: bool = False,
+    collection_name: Optional[str] = None,
 ) -> IndexResult:
     """Helper function to execute full end-to-end (Phase 1 + 2 + 3 + 4) indexing pipeline."""
     pipeline = IngestionPipeline()
@@ -223,4 +231,5 @@ def index_pdf(
         document_id=document_id,
         max_tokens=max_tokens,
         recreate_collection=recreate_collection,
+        collection_name=collection_name,
     )
