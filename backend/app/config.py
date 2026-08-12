@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, List, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +14,28 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     API_PREFIX: str = "/api"
+
+    # CORS Configuration: accepts List[str], JSON string, or comma-separated string
+    CORS_ORIGINS: Union[List[str], str] = [
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parses CORS_ORIGINS into a clean List[str]."""
+        if isinstance(self.CORS_ORIGINS, str):
+            val = self.CORS_ORIGINS.strip()
+            if val.startswith("[") and val.endswith("]"):
+                import json
+                try:
+                    return json.loads(val)
+                except Exception:
+                    pass
+            return [origin.strip() for origin in val.split(",") if origin.strip()]
+        return self.CORS_ORIGINS
 
     # Event Configuration
     EVENT_DURATION_MINUTES: int = 60

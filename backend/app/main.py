@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Generator
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -28,7 +29,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Attach Middlewares
+# Attach CORS Middleware for development & production origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "*"],
+)
+
+# Attach Custom Logging and Global Exception Middlewares
 app.add_middleware(RequestLoggingMiddleware)
 app.add_exception_handler(Exception, global_exception_handler)
 

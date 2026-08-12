@@ -1,44 +1,48 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Sparkles, AlertCircle } from 'lucide-react';
+import { Bot, Sparkles, Trash2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useTeamQuestions } from '../hooks/useTeams';
-import { useChatMutation } from '../hooks/useChat';
 import { ChatMessage } from '../components/chat/ChatMessage';
 import { ChatInput } from '../components/chat/ChatInput';
-import { QuestionCounterBadge } from '../components/common/QuestionCounter';
 import { ChatMessage as ChatMessageType } from '../types';
+import { sendChatMessage } from '../services/api';
+import { toast } from 'sonner';
+
+const CHAT_HISTORY_KEY = 'techonomy_chat_history';
+
+const DEFAULT_INITIAL_MESSAGES: ChatMessageType[] = [
+  {
+    id: '1',
+    sender: 'assistant',
+    text: "Hello Team! I'm your AI Knowledge Assistant. Ask me anything about the company documents.",
+    timestamp: '09:00 AM',
+  },
+];
 
 export const KnowledgeAssistantPage: React.FC = () => {
   const { user } = useAuth();
-  const { data: questions } = useTeamQuestions();
-  const chatMutation = useChatMutation();
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const questionsUsed = questions?.questions_used ?? user?.questions_used ?? 0;
-  const questionLimit = questions?.question_limit ?? user?.question_limit ?? 10;
-  const remaining = Math.max(0, questionLimit - questionsUsed);
-
-  const [messages, setMessages] = useState<ChatMessageType[]>([
-    {
-      id: '1',
-      sender: 'assistant',
-      text: "Hello Team! I'm your AI Knowledge Assistant. Ask me anything about the company documents.",
-      timestamp: '09:16 AM',
-    },
-    {
-      id: '2',
-      sender: 'user',
-      text: 'Which region has the highest revenue?',
-      timestamp: '09:16 AM',
-    },
-    {
-      id: '3',
-      sender: 'assistant',
-      text: 'According to the Annual Report 2024 (Page 117), South India generated the highest revenue contributing 32% of the total revenue.',
-      timestamp: '09:16 AM',
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessageType[]>(() => {
+    const saved = localStorage.getItem(CHAT_HISTORY_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Failed to load chat history from localStorage:', e);
+      }
+    }
+    return DEFAULT_INITIAL_MESSAGES;
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync messages state to localStorage
+  useEffect(() => {
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages));
+  }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,38 +50,63 @@ export const KnowledgeAssistantPage: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, chatMutation.isPending]);
+  }, [messages, isSubmitting]);
 
   const handleSendMessage = async (text: string) => {
+    if (!text.trim() || isSubmitting) return;
+
     const userMsg: ChatMessageType = {
       id: Date.now().toString(),
       sender: 'user',
-      text,
+      text: text.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
     setMessages((prev) => [...prev, userMsg]);
+    setIsSubmitting(true);
+
+    const activeTeamName = user?.team_name || (() => {
+      const stored = localStorage.getItem('techonomy_team');
+      return stored ? JSON.parse(stored).team_name : 'TEAM-01';
+    })();
 
     try {
-      const response = await chatMutation.mutateAsync(text);
+      const response = await sendChatMessage(activeTeamName, text.trim());
 
       const assistantMsg: ChatMessageType = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',
-        text: response.response,
+        text: response.answer,
+        sources: response.sources,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
+      console.error('Chat error:', err);
+      const userFacingMsg =
+        err?.userMessage ||
+        err?.response?.data?.detail ||
+        'Unable to connect to the Techonomy server. Please try again.';
+
+      toast.error(userFacingMsg);
+
       const errorMsg: ChatMessageType = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',
-        text: err?.response?.data?.detail || 'Error: Question quota limit reached or server unavailable.',
+        text: `⚠️ ${userFacingMsg}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleClearHistory = () => {
+    setMessages(DEFAULT_INITIAL_MESSAGES);
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(DEFAULT_INITIAL_MESSAGES));
+    toast.info('Chat view reset.');
   };
 
   return (
@@ -98,16 +127,15 @@ export const KnowledgeAssistantPage: React.FC = () => {
           </div>
         </div>
 
-        <QuestionCounterBadge used={questionsUsed} limit={questionLimit} />
+        <button
+          onClick={handleClearHistory}
+          className="p-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400 rounded-lg transition-colors flex items-center gap-1.5 text-xs border border-slate-200 dark:border-slate-800"
+          title="Clear visible chat history"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span className="hidden sm:inline">Clear Chat</span>
+        </button>
       </div>
-
-      {/* Quota Exhaustion Warning Banner if limit reached */}
-      {remaining <= 0 && (
-        <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-xs flex items-center gap-2 shrink-0">
-          <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-          <span>You have exhausted your team question limit. Contact your administrator to increase your quota.</span>
-        </div>
-      )}
 
       {/* Chat Messages Log Area */}
       <div className="flex-1 overflow-y-auto pr-2 space-y-2 rounded-xl">
@@ -115,7 +143,7 @@ export const KnowledgeAssistantPage: React.FC = () => {
           <ChatMessage key={msg.id} message={msg} />
         ))}
 
-        {chatMutation.isPending && (
+        {isSubmitting && (
           <div className="flex items-center gap-3 my-4 text-slate-400 text-xs pl-2">
             <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center animate-pulse">
               <Sparkles className="w-4 h-4" />
@@ -131,8 +159,8 @@ export const KnowledgeAssistantPage: React.FC = () => {
       <div className="pt-2 border-t border-slate-200 dark:border-slate-800 shrink-0">
         <ChatInput
           onSend={handleSendMessage}
-          isLoading={chatMutation.isPending}
-          disabled={remaining <= 0}
+          isLoading={isSubmitting}
+          disabled={isSubmitting}
         />
       </div>
     </div>

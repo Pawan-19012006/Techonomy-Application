@@ -27,11 +27,12 @@ export const DashboardPage: React.FC = () => {
     return <ErrorState onRetry={refetch} />;
   }
 
-  const teamName = user?.name || dashboard.team_name || 'Team 14';
-  const teamId = user ? `T${user.id}` : 'T14';
-  const questionLimit = dashboard.question_limit || user?.question_limit || 10;
-  const questionsRemaining = dashboard.questions_remaining;
+  const teamName = user?.team_name || user?.name || dashboard?.team_name || 'TEAM-01';
+  const teamId = teamName.substring(0, 4).toUpperCase();
+  const questionLimit = dashboard?.question_limit || user?.question_limit || 10;
+  const questionsRemaining = dashboard?.questions_remaining ?? 10;
   const questionsUsed = Math.max(0, questionLimit - questionsRemaining);
+
 
   const formatTimer = (totalSeconds: number) => {
     const hrs = Math.floor(totalSeconds / 3600);

@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { getTeamMeApi, getTeamQuestionsApi, getTeamHistoryApi } from '../api/teams';
 
-export const useTeamProfile = () => {
+export const useTeamProfile = (teamName?: string) => {
   return useQuery({
-    queryKey: ['team-profile'],
-    queryFn: getTeamMeApi,
+    queryKey: ['team-profile', teamName],
+    queryFn: () => getTeamMeApi(teamName),
   });
 };
 
@@ -15,9 +15,9 @@ export const useTeamQuestions = () => {
   });
 };
 
-export const useTeamHistory = () => {
+export const useTeamHistory = (teamName?: string) => {
   return useQuery({
-    queryKey: ['team-history'],
-    queryFn: getTeamHistoryApi,
+    queryKey: ['team-history', teamName],
+    queryFn: () => getTeamHistoryApi(teamName),
   });
 };

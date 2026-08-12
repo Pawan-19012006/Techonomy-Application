@@ -20,6 +20,31 @@ def setup_database():
     reset_db()
 
 
+def test_cors_preflight_and_headers():
+    """Verifies CORS preflight OPTIONS request and CORS headers on API endpoints."""
+    origin = "http://localhost:3001"
+
+    # OPTIONS preflight check
+    headers = {
+        "Origin": origin,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Content-Type, Authorization",
+    }
+    options_res = client.options(f"{settings.API_PREFIX}/teams/join", headers=headers)
+    assert options_res.status_code == 200
+    assert options_res.headers.get("access-control-allow-origin") == origin
+    assert "POST" in options_res.headers.get("access-control-allow-methods", "")
+
+    # Actual POST request from allowed origin
+    post_res = client.post(
+        f"{settings.API_PREFIX}/teams/join",
+        json={"team_name": "CORS-TEAM", "member_names": ["Tester"]},
+        headers={"Origin": origin},
+    )
+    assert post_res.status_code == 200
+    assert post_res.headers.get("access-control-allow-origin") == origin
+
+
 def test_1_team_joins_successfully():
     """1. Team joins successfully via POST /api/teams/join."""
     payload = {

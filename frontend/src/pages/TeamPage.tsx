@@ -1,24 +1,17 @@
 import React from 'react';
-import { Users, Mail, Calendar, HelpCircle, History, ShieldCheck } from 'lucide-react';
+import { Users, Calendar, History, UserCheck } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useTeamQuestions, useTeamHistory } from '../hooks/useTeams';
-import { QuestionProgressBar } from '../components/common/QuestionCounter';
-import { CardSkeleton } from '../components/common/LoadingSkeleton';
+import { useTeamHistory } from '../hooks/useTeams';
 
 export const TeamPage: React.FC = () => {
   const { user } = useAuth();
-  const { data: questions } = useTeamQuestions();
-  const { data: history } = useTeamHistory();
+  const { data: history } = useTeamHistory(user?.team_name);
 
-  const teamName = user?.name || 'Team 14';
-  const teamEmail = user?.email || 'devs@acme.com';
-  const teamId = user ? `T${user.id}` : 'T14';
-  const joinedDate = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })
-    : 'Aug 03, 2026';
-
-  const questionsUsed = questions?.questions_used ?? user?.questions_used ?? 0;
-  const questionLimit = questions?.question_limit ?? user?.question_limit ?? 10;
+  const teamName = user?.team_name || 'TEAM-01';
+  const memberNames = user?.member_names || ['Pawan', 'Rahul', 'Kabilan'];
+  const startedDate = user?.started_at
+    ? new Date(user.started_at).toLocaleString()
+    : new Date().toLocaleString();
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -28,7 +21,7 @@ export const TeamPage: React.FC = () => {
           Team Profile
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Team identity, quota limits, and execution query history.
+          Team identity, members, and execution query history logged on Techonomy server.
         </p>
       </div>
 
@@ -36,7 +29,7 @@ export const TeamPage: React.FC = () => {
       <div className="enterprise-card p-6 space-y-6">
         <div className="flex items-center gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
           <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white font-bold text-xl flex items-center justify-center border-2 border-indigo-400/30 shadow-md">
-            {teamId}
+            {teamName.substring(0, 3).toUpperCase()}
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
@@ -44,46 +37,43 @@ export const TeamPage: React.FC = () => {
             </h2>
             <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
               <span className="flex items-center gap-1">
-                <Mail className="w-3.5 h-3.5 text-indigo-500" /> {teamEmail}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> {user?.is_admin ? 'Admin' : 'Standard Team'}
+                <Users className="w-3.5 h-3.5 text-indigo-500" /> Members: {memberNames.join(', ')}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Info Grid Cards matching mockup */}
+        {/* Info Grid Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60">
-            <span className="text-xs text-slate-500 dark:text-slate-400">Team ID</span>
-            <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{teamId}</p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60">
-            <span className="text-xs text-slate-500 dark:text-slate-400">Team Name</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Users className="w-3.5 h-3.5 text-indigo-500" /> Team Name
+            </span>
             <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{teamName}</p>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60">
-            <span className="text-xs text-slate-500 dark:text-slate-400">Joined On</span>
-            <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{joinedDate}</p>
+            <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <UserCheck className="w-3.5 h-3.5 text-indigo-500" /> Members Count
+            </span>
+            <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{memberNames.length}</p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60">
+            <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-indigo-500" /> Started At
+            </span>
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">{startedDate}</p>
           </div>
         </div>
       </div>
 
-      {/* Question Usage Bar */}
-      <div className="enterprise-card p-6">
-        <QuestionProgressBar used={questionsUsed} limit={questionLimit} />
-      </div>
-
-      {/* Recent Query Activity Log */}
+      {/* Query Activity Log */}
       <div className="enterprise-card p-6 space-y-4">
         <div className="flex items-center gap-2">
           <History className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-            Prompt Query History
+            Prompt Query History Log
           </h3>
         </div>
 

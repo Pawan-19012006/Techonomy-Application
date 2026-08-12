@@ -1,24 +1,24 @@
 import React from 'react';
-import { Menu, Sun, Moon, Users } from 'lucide-react';
+import { Menu, Sun, Moon, Users, LogOut } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useEventStatus } from '../../hooks/useEvent';
-import { TimerBadge } from '../common/TimerBadge';
-import { QuestionCounterBadge } from '../common/QuestionCounter';
+import { useNavigate } from 'react-router-dom';
 
 interface NavbarProps {
   onToggleMobileSidebar: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
-  const { user } = useAuth();
+  const { user, logoutTeam } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { data: eventStatus } = useEventStatus();
+  const navigate = useNavigate();
 
-  const teamName = user?.name || 'Team 14';
-  const teamId = user ? `T${user.id}` : 'T14';
-  const questionsUsed = user?.questions_used || 0;
-  const questionLimit = user?.question_limit || 10;
+  const teamName = user?.team_name || 'TEAM-01';
+
+  const handleLogout = () => {
+    if (logoutTeam) logoutTeam();
+    navigate('/login');
+  };
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-[#111827] text-white border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between">
@@ -35,20 +35,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
         <div className="hidden sm:flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
           <Users className="w-4 h-4 text-indigo-400" />
           <span className="text-xs font-semibold text-slate-200">{teamName}</span>
-          <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded font-mono">
-            {teamId}
-          </span>
         </div>
       </div>
 
-      {/* Right Action Widgets (Timer, Questions, Theme Toggle, Profile Avatar) */}
+      {/* Right Action Widgets */}
       <div className="flex items-center gap-3 sm:gap-4">
-        {/* Live Timer */}
-        <TimerBadge initialSeconds={eventStatus?.timer_remaining_seconds || 9936} />
-
-        {/* Questions Remaining Counter */}
-        <QuestionCounterBadge used={questionsUsed} limit={questionLimit} />
-
         {/* Dark Mode Toggle */}
         <button
           onClick={toggleTheme}
@@ -58,9 +49,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-300" />}
         </button>
 
+        {/* Exit / Leave Arena Button */}
+        <button
+          onClick={handleLogout}
+          className="p-2 text-slate-400 hover:text-red-400 bg-slate-800/80 hover:bg-red-950/30 rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5 text-xs"
+          title="Exit Arena"
+        >
+          <LogOut className="w-4 h-4" />
+          <span className="hidden sm:inline">Exit Arena</span>
+        </button>
+
         {/* Team Profile Avatar */}
         <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center border-2 border-indigo-400/30">
-          {teamId}
+          {teamName.substring(0, 2).toUpperCase()}
         </div>
       </div>
     </header>
