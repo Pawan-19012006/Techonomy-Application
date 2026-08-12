@@ -7,7 +7,8 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 45000, // 45 seconds timeout for LLM/RAG responses
+  // Set timeout to 75s to ensure Frontend timeout (75s) > Backend max execution time (~61s)
+  timeout: 75000,
 });
 
 // Request Interceptor
@@ -21,7 +22,11 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (!error.response) {
-      error.userMessage = 'Unable to connect to the Techonomy server. Please check your backend network connection and try again.';
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        error.userMessage = 'The request timed out while waiting for the AI response. Please try asking your question again.';
+      } else {
+        error.userMessage = 'Unable to connect to the Techonomy server. Please check your backend network connection and try again.';
+      }
     } else {
       const status = error.response.status;
       const detail = error.response.data?.detail;

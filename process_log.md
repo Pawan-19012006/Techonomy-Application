@@ -373,6 +373,44 @@ This file records the development process, code changes, and rationale for all m
   - Executed Pytest suite (**44/44 tests passed 100%**).
   - Executed `npm run build` (**0 errors**).
 
+---
+
+## ⚡ Step 24: RAG Latency Instrumentation & Bottleneck Profiling
+**Action:** Instrument the complete RAG serving pipeline with high-resolution timing (`time.perf_counter()`) across all 13 pipeline stages without altering RAG retrieval architecture or quality.
+- **Instrumented Components:**
+  - [retrieval_result.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/models/retrieval_result.py): Added `timing: Dict[str, float]` field to hold stage timings.
+  - [retrieval_pipeline.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/retrieval/retrieval_pipeline.py): Measured `query_processing`, `embedding`, `vector_search`, `reranking`, and `context_building`.
+  - [llm_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/rag/llm_service.py): Measured individual attempt start times, durations, HTTP statuses, retries, model name, and timeouts.
+  - [chat_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/rag/chat_service.py): Measured `prompt_building`, `llm_generation`, `chat_service_total`, and returned `timing` dict in `ChatServiceResult`.
+  - [chat.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/chat.py): Measured request validation, `TeamService.log_prompt()`, and emitted structured `[RAG TIMING]` breakdown logs. Warns if database write exceeds 100ms.
+- **Empirical Diagnostics:**
+  - Identified **LLM API Response Time** (`cohere/north-mini-code:free` taking 13s–53s) as the primary bottleneck for warm queries.
+  - Identified **Cold-Start Embedding Model Loading** (`BAAI/bge-small-en-v1.5` taking 87s–107s on first query initialization) as the initial request bottleneck.
+  - Verified **Database Logging** (`PromptLog`) is extremely fast (5ms–23ms) and contributes zero meaningful latency.
+- **Verification:**
+  - Executed Pytest test suite (**44/44 tests passed 100%**).
+  - Benchmark scripts ([scripts/test_rag.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/test_rag.py), [scripts/measure_chat_latency.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/measure_chat_latency.py)) executed successfully.
+
+---
+
+## ⚡ Step 25: Diagnosis & Reliability Fix for Frontend Chat Timeout
+**Action:** Diagnosed and resolved the root cause of the frontend `AxiosError: timeout of 45000ms exceeded` error on `POST /api/chat` requests.
+- **Root Cause Identified:**
+  - Frontend Axios client in `frontend/src/api/axios.ts` was hardcoded to a 45-second timeout (`timeout: 45000`).
+  - Backend LLM configuration has `LLM_TIMEOUT_SECONDS = 30.0s` with `LLM_MAX_RETRIES = 1` (allowing a worst-case execution time of 61 seconds).
+  - On queries where LLM generation took >45 seconds (or during cold-start model initialization), Axios prematurely aborted the HTTP request at 45 seconds before the backend could return its HTTP 200 response, causing the frontend to report *"Unable to connect to the Techonomy server."*
+- **Step Milestones & Reliability Instrumentation:**
+  - [app/api/chat.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/chat.py) & [app/knowledge/rag/chat_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/rag/chat_service.py): Added step milestones (`[RAG STEP] CHAT REQUEST START`, `RETRIEVAL START/END`, `PROMPT BUILD START/END`, `LLM REQUEST START`, `LLM RESPONSE RECEIVED`, `PROMPT LOG START/END`, `CHAT REQUEST END`).
+  - Extracted `active_team_name` string safely before async operations to prevent SQLAlchemy `ObjectDeletedError` session detachment.
+- **Timeout Policy Alignment:**
+  - [frontend/src/api/axios.ts](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/frontend/src/api/axios.ts): Updated Axios timeout to `75000` (75 seconds) ensuring `Frontend Timeout (75s) > Backend Maximum Execution Time (61s)`.
+- **Verification:**
+  - Tested `"What is the company's annual revenue?"` 3 times end-to-end ([scripts/measure_target_question.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/measure_target_question.py)): All 3 requests returned `HTTP 200 OK` with valid answers, source citations, and team names.
+  - Executed Pytest suite (**44/44 tests passed 100%**).
+  - Executed `npm run build` (**0 errors**).
+
+
+
 
 
 

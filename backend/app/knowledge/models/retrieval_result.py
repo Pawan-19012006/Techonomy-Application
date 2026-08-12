@@ -1,6 +1,6 @@
 """RetrievalResult domain model summarizing the complete retrieval operation."""
 
-from typing import List
+from typing import Dict, List
 from pydantic import BaseModel, Field
 
 from app.knowledge.models.context_package import ContextPackage
@@ -20,6 +20,7 @@ class RetrievalResult(BaseModel):
         reranked_results (List[SearchResult]): List of reranked SearchResult matches.
         context_package (ContextPackage): Final synthesized ContextPackage object.
         processing_time (float): Total retrieval pipeline execution duration in seconds.
+        timing (Dict[str, float]): High-resolution latency breakdown of pipeline stages in seconds.
     """
 
     processed_query: ProcessedQuery = Field(..., description="Processed query object")
@@ -30,3 +31,4 @@ class RetrievalResult(BaseModel):
     reranked_results: List[SearchResult] = Field(default_factory=list, description="Reranked search results")
     context_package: ContextPackage = Field(..., description="Synthesized ContextPackage object")
     processing_time: float = Field(default=0.0, description="Elapsed execution time in seconds")
+    timing: Dict[str, float] = Field(default_factory=dict, description="Stage latency timings in seconds")

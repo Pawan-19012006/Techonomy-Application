@@ -1,8 +1,8 @@
-"""ChatService orchestrating grounded RAG query generation."""
+"""ChatService orchestrating grounded RAG query generation with step milestone instrumentation."""
 
-from typing import Any, List, Optional
+import time
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
-
 
 from app.config import settings
 from app.knowledge.exceptions import ChatServiceError
@@ -23,17 +23,11 @@ class ChatServiceResult(BaseModel):
     sources: List[SourceItem] = Field(default_factory=list, description="Extracted source document citations")
     confidence: Optional[float] = Field(default=None, description="Top chunk similarity confidence score")
     retrieval_result: Optional[Any] = Field(default=None, description="Underlying retrieval result object")
-
+    timing: Dict[str, float] = Field(default_factory=dict, description="Stage latency timings in seconds")
 
 
 class ChatService:
-    """Orchestrates end-to-end RAG workflow: RetrievalPipeline -> PromptBuilder -> LLMService.
-
-    Strict Boundaries:
-    - Never accesses Qdrant directly (delegates to RetrievalPipeline).
-    - Never generates vector embeddings directly.
-    - Never performs user authentication logic.
-    """
+    """Orchestrates end-to-end RAG workflow: RetrievalPipeline -> PromptBuilder -> LLMService."""
 
     def __init__(
         self,
@@ -51,15 +45,18 @@ class ChatService:
         sources: List[SourceItem] = []
         seen = set()
 
-        for chunk in retrieval_result.reranked_results:
-            doc_name = chunk.document_name
-            pages = chunk.page_numbers if chunk.page_numbers else [None]
+        reranked = getattr(retrieval_result, "reranked_results", None) or []
+        if isinstance(reranked, list):
+            for chunk in reranked:
+                doc_name = getattr(chunk, "document_name", "document.pdf")
+                raw_pages = getattr(chunk, "page_numbers", None)
+                pages = raw_pages if raw_pages else [None]
 
-            for pg in pages:
-                key = (doc_name, pg)
-                if key not in seen:
-                    seen.add(key)
-                    sources.append(SourceItem(document=doc_name, page=pg))
+                for pg in pages:
+                    key = (doc_name, pg)
+                    if key not in seen:
+                        seen.add(key)
+                        sources.append(SourceItem(document=doc_name, page=pg))
 
         return sources
 
@@ -69,56 +66,63 @@ class ChatService:
         top_k: int = settings.RETRIEVAL_TOP_K,
         top_n: int = settings.RETRIEVAL_RERANK_TOP_N,
     ) -> ChatServiceResult:
-        """Executes synchronous RAG question answering pipeline.
-
-        Args:
-            query (str): User question prompt.
-            top_k (int): Number of initial vector matches to retrieve.
-            top_n (int): Number of top reranked matches to select.
-
-        Returns:
-            ChatServiceResult: Generated answer, source citations, confidence, and metadata.
-
-        Raises:
-            ChatServiceError: If RAG processing fails.
-        """
+        """Executes synchronous RAG question answering pipeline with explicit step instrumentation."""
         if not query or not query.strip():
             raise ChatServiceError("User query cannot be empty.")
 
-        logger.info(f"=== Starting ChatService.ask() for query: '{query[:60]}...' ===")
+        t_service_start = time.perf_counter()
 
         try:
-            # 1 & 2. Retrieve top K relevant chunks using existing RetrievalPipeline
+            logger.info("[RAG STEP] RETRIEVAL START")
             retrieval_result = self.retrieval_pipeline.retrieve(
                 query=query,
                 top_k=top_k,
                 top_n=top_n,
             )
+            p_time = getattr(retrieval_result, "processing_time", 0.0)
+            p_time_str = f"{p_time:.3f}s" if isinstance(p_time, (int, float)) else str(p_time)
+            logger.info(f"[RAG STEP] RETRIEVAL END (Duration: {p_time_str})")
 
-            # 3 & 4. Pass retrieved chunks into PromptBuilder to create production prompt
+            logger.info("[RAG STEP] PROMPT BUILD START")
+            t_pb_start = time.perf_counter()
+            reranked = getattr(retrieval_result, "reranked_results", [])
             prompt = self.prompt_builder.build_prompt(
                 query=query,
-                chunks=retrieval_result.reranked_results,
+                chunks=reranked if isinstance(reranked, list) else [],
             )
+            t_prompt_building = time.perf_counter() - t_pb_start
+            logger.info(f"[RAG STEP] PROMPT BUILD END (Duration: {t_prompt_building:.3f}s)")
 
-            # 5. Call LLMService to generate answer
+            logger.info("[RAG STEP] LLM REQUEST START")
+            t_llm_start = time.perf_counter()
             answer = self.llm_service.generate(prompt)
+            t_llm_generation = time.perf_counter() - t_llm_start
+            logger.info(f"[RAG STEP] LLM RESPONSE RECEIVED (Duration: {t_llm_generation:.3f}s)")
 
-            # 6. Extract source documents, page numbers, and confidence
             sources = self._extract_sources(retrieval_result)
-            confidence = (
-                round(retrieval_result.reranked_results[0].score, 4)
-                if retrieval_result.reranked_results
-                else None
-            )
+            confidence = None
+            if isinstance(reranked, list) and len(reranked) > 0 and hasattr(reranked[0], "score"):
+                try:
+                    confidence = round(float(reranked[0].score), 4)
+                except Exception:
+                    pass
 
-            logger.info("=== Completed ChatService.ask() successfully ===")
+            raw_timing = getattr(retrieval_result, "timing", {})
+            ret_timing = raw_timing if isinstance(raw_timing, dict) else {}
+
+            timing: Dict[str, float] = {
+                **ret_timing,
+                "prompt_building": round(t_prompt_building, 4),
+                "llm_generation": round(t_llm_generation, 4),
+                "chat_service_total": round(time.perf_counter() - t_service_start, 4),
+            }
 
             return ChatServiceResult(
                 answer=answer,
                 sources=sources,
                 confidence=confidence,
                 retrieval_result=retrieval_result,
+                timing=timing,
             )
 
         except Exception as e:
@@ -131,44 +135,63 @@ class ChatService:
         top_k: int = settings.RETRIEVAL_TOP_K,
         top_n: int = settings.RETRIEVAL_RERANK_TOP_N,
     ) -> ChatServiceResult:
-        """Executes asynchronous RAG question answering pipeline."""
+        """Executes asynchronous RAG question answering pipeline with explicit step instrumentation."""
         if not query or not query.strip():
             raise ChatServiceError("User query cannot be empty.")
 
-        logger.info(f"=== Starting ChatService.ask_async() for query: '{query[:60]}...' ===")
+        t_service_start = time.perf_counter()
 
         try:
-            # 1 & 2. Retrieve top K relevant chunks using existing RetrievalPipeline
+            logger.info("[RAG STEP] RETRIEVAL START")
             retrieval_result = self.retrieval_pipeline.retrieve(
                 query=query,
                 top_k=top_k,
                 top_n=top_n,
             )
+            p_time = getattr(retrieval_result, "processing_time", 0.0)
+            p_time_str = f"{p_time:.3f}s" if isinstance(p_time, (int, float)) else str(p_time)
+            logger.info(f"[RAG STEP] RETRIEVAL END (Duration: {p_time_str})")
 
-            # 3 & 4. Pass retrieved chunks into PromptBuilder
+            logger.info("[RAG STEP] PROMPT BUILD START")
+            t_pb_start = time.perf_counter()
+            reranked = getattr(retrieval_result, "reranked_results", [])
             prompt = self.prompt_builder.build_prompt(
                 query=query,
-                chunks=retrieval_result.reranked_results,
+                chunks=reranked if isinstance(reranked, list) else [],
             )
+            t_prompt_building = time.perf_counter() - t_pb_start
+            logger.info(f"[RAG STEP] PROMPT BUILD END (Duration: {t_prompt_building:.3f}s)")
 
-            # 5. Call LLMService asynchronously
+            logger.info("[RAG STEP] LLM REQUEST START")
+            t_llm_start = time.perf_counter()
             answer = await self.llm_service.generate_async(prompt)
+            t_llm_generation = time.perf_counter() - t_llm_start
+            logger.info(f"[RAG STEP] LLM RESPONSE RECEIVED (Duration: {t_llm_generation:.3f}s)")
 
-            # 6. Extract sources & confidence
             sources = self._extract_sources(retrieval_result)
-            confidence = (
-                round(retrieval_result.reranked_results[0].score, 4)
-                if retrieval_result.reranked_results
-                else None
-            )
+            confidence = None
+            if isinstance(reranked, list) and len(reranked) > 0 and hasattr(reranked[0], "score"):
+                try:
+                    confidence = round(float(reranked[0].score), 4)
+                except Exception:
+                    pass
 
-            logger.info("=== Completed ChatService.ask_async() successfully ===")
+            raw_timing = getattr(retrieval_result, "timing", {})
+            ret_timing = raw_timing if isinstance(raw_timing, dict) else {}
+
+            timing: Dict[str, float] = {
+                **ret_timing,
+                "prompt_building": round(t_prompt_building, 4),
+                "llm_generation": round(t_llm_generation, 4),
+                "chat_service_total": round(time.perf_counter() - t_service_start, 4),
+            }
 
             return ChatServiceResult(
                 answer=answer,
                 sources=sources,
                 confidence=confidence,
                 retrieval_result=retrieval_result,
+                timing=timing,
             )
 
         except Exception as e:
