@@ -24,6 +24,7 @@ class LLMService:
         base_url: str = settings.OPENROUTER_BASE_URL,
         timeout_seconds: float = settings.LLM_TIMEOUT_SECONDS,
         max_retries: int = settings.LLM_MAX_RETRIES,
+        max_tokens: int = 500,
     ):
         """Initializes LLMService with OpenRouter settings."""
         self.api_key = api_key
@@ -31,6 +32,7 @@ class LLMService:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
+        self.max_tokens = max_tokens
 
     def _build_payload(self, prompt: str) -> Dict[str, Any]:
         """Constructs OpenRouter chat completion JSON request payload."""
@@ -43,6 +45,8 @@ class LLMService:
                 }
             ],
             "temperature": 0.1,
+            "max_tokens": self.max_tokens,
+            "stream": False,
         }
 
     def _build_headers(self) -> Dict[str, str]:
@@ -53,6 +57,19 @@ class LLMService:
             "X-Title": "Techonomy Enterprise Knowledge Platform",
             "Content-Type": "application/json",
         }
+
+    def _log_config(self) -> None:
+        """Logs OpenRouter configuration details excluding API key."""
+        logger.info(
+            f"\n[LLM CONFIGURATION]\n"
+            f"model={self.model}\n"
+            f"temperature=0.1\n"
+            f"max_tokens={self.max_tokens}\n"
+            f"stream=False\n"
+            f"reasoning=default/none\n"
+            f"timeout={self.timeout_seconds}s\n"
+            f"max_retries={self.max_retries}"
+        )
 
     def generate(self, prompt: str, raise_on_missing_key: bool = False) -> str:
         """Executes synchronous OpenRouter API generation call with per-attempt high-resolution timing."""
@@ -74,18 +91,17 @@ class LLMService:
         headers = self._build_headers()
         payload = self._build_payload(prompt)
 
+        self._log_config()
+
         for attempt in range(self.max_retries + 1):
             attempt_num = attempt + 1
-            logger.info(
-                f"[LLM TIMING] Attempt {attempt_num}/{self.max_retries + 1} starting "
-                f"(model: '{self.model}', timeout: {self.timeout_seconds}s)..."
-            )
             t_attempt_start = time.perf_counter()
 
             try:
                 with httpx.Client(timeout=self.timeout_seconds) as client:
                     response = client.post(url, headers=headers, json=payload)
                     duration = time.perf_counter() - t_attempt_start
+                    status_code = response.status_code
                     response.raise_for_status()
                     data = response.json()
 
@@ -97,23 +113,28 @@ class LLMService:
                         raise OpenRouterAPIError("OpenRouter API returned empty text response.")
 
                     logger.info(
-                        f"[LLM TIMING] Attempt {attempt_num}: Status {response.status_code} "
-                        f"in {duration:.3f}s (Success)."
+                        f"\n[LLM ATTEMPT]\n"
+                        f"attempt={attempt_num}\n"
+                        f"model={self.model}\n"
+                        f"duration={duration:.3f}s\n"
+                        f"status={status_code}\n"
+                        f"success=true"
                     )
                     return content.strip()
 
             except httpx.TimeoutException as te:
                 duration = time.perf_counter() - t_attempt_start
+                logger.warning(
+                    f"\n[LLM ATTEMPT]\n"
+                    f"attempt={attempt_num}\n"
+                    f"model={self.model}\n"
+                    f"duration={duration:.3f}s\n"
+                    f"status=timeout\n"
+                    f"success=false"
+                )
                 if attempt < self.max_retries:
-                    logger.warning(
-                        f"[LLM TIMING] Attempt {attempt_num}: Timeout after {duration:.3f}s "
-                        f"(threshold: {self.timeout_seconds}s). Retrying..."
-                    )
                     time.sleep(1.0)
                     continue
-                logger.error(
-                    f"[LLM TIMING] Attempt {attempt_num}: Timeout after {duration:.3f}s on final attempt."
-                )
                 raise LLMTimeoutError(
                     f"OpenRouter API request timed out after {self.timeout_seconds} seconds."
                 ) from te
@@ -121,21 +142,32 @@ class LLMService:
             except httpx.HTTPStatusError as hse:
                 duration = time.perf_counter() - t_attempt_start
                 status_code = hse.response.status_code
-                error_msg = f"OpenRouter HTTP {status_code} in {duration:.3f}s: {hse.response.text}"
+                logger.warning(
+                    f"\n[LLM ATTEMPT]\n"
+                    f"attempt={attempt_num}\n"
+                    f"model={self.model}\n"
+                    f"duration={duration:.3f}s\n"
+                    f"status={status_code}\n"
+                    f"success=false"
+                )
                 if attempt < self.max_retries and status_code in (429, 500, 502, 503, 504):
-                    logger.warning(f"[LLM TIMING] Attempt {attempt_num}: HTTP {status_code} in {duration:.3f}s. Retrying...")
                     time.sleep(1.0)
                     continue
-                logger.error(f"[LLM TIMING] Attempt {attempt_num}: {error_msg}")
-                raise OpenRouterAPIError(error_msg) from hse
+                raise OpenRouterAPIError(f"OpenRouter HTTP {status_code}: {hse.response.text}") from hse
 
             except Exception as e:
                 duration = time.perf_counter() - t_attempt_start
+                logger.warning(
+                    f"\n[LLM ATTEMPT]\n"
+                    f"attempt={attempt_num}\n"
+                    f"model={self.model}\n"
+                    f"duration={duration:.3f}s\n"
+                    f"status=error\n"
+                    f"success=false"
+                )
                 if attempt < self.max_retries:
-                    logger.warning(f"[LLM TIMING] Attempt {attempt_num}: Failed in {duration:.3f}s ({e}). Retrying...")
                     time.sleep(1.0)
                     continue
-                logger.error(f"[LLM TIMING] Attempt {attempt_num}: Failed in {duration:.3f}s ({e}).")
                 raise OpenRouterAPIError(f"OpenRouter generation error: {str(e)}") from e
 
     async def generate_async(self, prompt: str, raise_on_missing_key: bool = False) -> str:
@@ -158,18 +190,17 @@ class LLMService:
         headers = self._build_headers()
         payload = self._build_payload(prompt)
 
+        self._log_config()
+
         for attempt in range(self.max_retries + 1):
             attempt_num = attempt + 1
-            logger.info(
-                f"[LLM TIMING] Attempt {attempt_num}/{self.max_retries + 1} starting "
-                f"(model: '{self.model}', timeout: {self.timeout_seconds}s)..."
-            )
             t_attempt_start = time.perf_counter()
 
             try:
                 async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                     response = await client.post(url, headers=headers, json=payload)
                     duration = time.perf_counter() - t_attempt_start
+                    status_code = response.status_code
                     response.raise_for_status()
                     data = response.json()
 
@@ -181,23 +212,28 @@ class LLMService:
                         raise OpenRouterAPIError("OpenRouter API returned empty text response.")
 
                     logger.info(
-                        f"[LLM TIMING] Attempt {attempt_num}: Status {response.status_code} "
-                        f"in {duration:.3f}s (Success)."
+                        f"\n[LLM ATTEMPT]\n"
+                        f"attempt={attempt_num}\n"
+                        f"model={self.model}\n"
+                        f"duration={duration:.3f}s\n"
+                        f"status={status_code}\n"
+                        f"success=true"
                     )
                     return content.strip()
 
             except httpx.TimeoutException as te:
                 duration = time.perf_counter() - t_attempt_start
+                logger.warning(
+                    f"\n[LLM ATTEMPT]\n"
+                    f"attempt={attempt_num}\n"
+                    f"model={self.model}\n"
+                    f"duration={duration:.3f}s\n"
+                    f"status=timeout\n"
+                    f"success=false"
+                )
                 if attempt < self.max_retries:
-                    logger.warning(
-                        f"[LLM TIMING] Attempt {attempt_num}: Timeout after {duration:.3f}s "
-                        f"(threshold: {self.timeout_seconds}s). Retrying..."
-                    )
                     await asyncio.sleep(1.0)
                     continue
-                logger.error(
-                    f"[LLM TIMING] Attempt {attempt_num}: Timeout after {duration:.3f}s on final attempt."
-                )
                 raise LLMTimeoutError(
                     f"OpenRouter API request timed out after {self.timeout_seconds} seconds."
                 ) from te
@@ -205,19 +241,30 @@ class LLMService:
             except httpx.HTTPStatusError as hse:
                 duration = time.perf_counter() - t_attempt_start
                 status_code = hse.response.status_code
-                error_msg = f"OpenRouter HTTP {status_code} in {duration:.3f}s: {hse.response.text}"
+                logger.warning(
+                    f"\n[LLM ATTEMPT]\n"
+                    f"attempt={attempt_num}\n"
+                    f"model={self.model}\n"
+                    f"duration={duration:.3f}s\n"
+                    f"status={status_code}\n"
+                    f"success=false"
+                )
                 if attempt < self.max_retries and status_code in (429, 500, 502, 503, 504):
-                    logger.warning(f"[LLM TIMING] Attempt {attempt_num}: HTTP {status_code} in {duration:.3f}s. Retrying...")
                     await asyncio.sleep(1.0)
                     continue
-                logger.error(f"[LLM TIMING] Attempt {attempt_num}: {error_msg}")
-                raise OpenRouterAPIError(error_msg) from hse
+                raise OpenRouterAPIError(f"OpenRouter HTTP {status_code}: {hse.response.text}") from hse
 
             except Exception as e:
                 duration = time.perf_counter() - t_attempt_start
+                logger.warning(
+                    f"\n[LLM ATTEMPT]\n"
+                    f"attempt={attempt_num}\n"
+                    f"model={self.model}\n"
+                    f"duration={duration:.3f}s\n"
+                    f"status=error\n"
+                    f"success=false"
+                )
                 if attempt < self.max_retries:
-                    logger.warning(f"[LLM TIMING] Attempt {attempt_num}: Failed in {duration:.3f}s ({e}). Retrying...")
                     await asyncio.sleep(1.0)
                     continue
-                logger.error(f"[LLM TIMING] Attempt {attempt_num}: Failed in {duration:.3f}s ({e}).")
                 raise OpenRouterAPIError(f"OpenRouter generation error: {str(e)}") from e
