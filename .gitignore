@@ -49,6 +49,9 @@ backend/.venv/
 backend/venv/
 backend/env/
 
+# Local configuration / secrets
+/backend/app/config.py
+
 # ==========================================
 # Databases & Vector DB Local Storage
 # ==========================================
