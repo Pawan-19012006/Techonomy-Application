@@ -30,6 +30,9 @@ env/
 !.env.example
 *.env
 
+# Local configuration / secrets
+/backend/app/config.py
+
 # ==========================================
 # Databases & Vector DB Storage
 # ==========================================
