@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Central configuration for Techonomy Event backend application."""
+    """Central configuration for Techonomy Knowledge Intelligence Platform backend."""
 
     # Application Configuration
     PROJECT_NAME: str = "Techonomy Knowledge Intelligence Platform"
@@ -58,6 +58,17 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_NAME: str = "company_knowledge"
     QDRANT_DISTANCE_METRIC: str = "Cosine"
     QDRANT_STORAGE_PATH: str = "./qdrant_storage"
+    QDRANT_TIMEOUT_SECONDS: float = 10.0
+
+    # Query Embedding Cache Configuration
+    QUERY_EMBEDDING_CACHE_ENABLED: bool = True
+    QUERY_EMBEDDING_CACHE_SIZE: int = 500
+    QUERY_EMBEDDING_CACHE_TTL_SECONDS: int = 3600
+
+    # RAG Answer Cache Configuration
+    ANSWER_CACHE_ENABLED: bool = True
+    ANSWER_CACHE_SIZE: int = 500
+    ANSWER_CACHE_TTL_SECONDS: int = 1800
 
     # Knowledge Retrieval Engine Configuration
     RETRIEVAL_TOP_K: int = 10
@@ -65,12 +76,15 @@ class Settings(BaseSettings):
     RETRIEVAL_CONTEXT_TOKEN_BUDGET: int = 2000
     RETRIEVAL_MINIMUM_SIMILARITY: float = 0.3
 
-    # OpenRouter & LLM Configuration
+    # LLM Gateway & Provider Configuration
     OPENROUTER_API_KEY: str = "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"
+    PRIMARY_MODEL: str = "cohere/north-mini-code:free"
+    FALLBACK_MODEL: str = "meta-llama/llama-3.2-3b-instruct:free"
     OPENROUTER_MODEL: str = "cohere/north-mini-code:free"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     LLM_TIMEOUT_SECONDS: float = 30.0
     LLM_MAX_RETRIES: int = 1
+    LLM_MAX_TOKENS: int = 1000
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,4 +1,4 @@
-"""ChatService orchestrating grounded RAG query generation with step milestone instrumentation."""
+"""ChatService orchestrating grounded RAG query generation with Answer Cache integration."""
 
 import time
 from typing import Any, Dict, List, Optional
@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.config import settings
 from app.knowledge.exceptions import ChatServiceError
 from app.knowledge.models.retrieval_result import RetrievalResult
+from app.knowledge.rag.answer_cache import answer_cache
 from app.knowledge.rag.llm_service import LLMService
 from app.knowledge.rag.prompt_builder import PromptBuilder
 from app.knowledge.retrieval.retrieval_pipeline import RetrievalPipeline
@@ -27,7 +28,7 @@ class ChatServiceResult(BaseModel):
 
 
 class ChatService:
-    """Orchestrates end-to-end RAG workflow: RetrievalPipeline -> PromptBuilder -> LLMService."""
+    """Orchestrates end-to-end RAG workflow: AnswerCache -> RetrievalPipeline -> PromptBuilder -> LLMService."""
 
     def __init__(
         self,
@@ -66,11 +67,28 @@ class ChatService:
         top_k: int = settings.RETRIEVAL_TOP_K,
         top_n: int = settings.RETRIEVAL_RERANK_TOP_N,
     ) -> ChatServiceResult:
-        """Executes synchronous RAG question answering pipeline with explicit step instrumentation."""
+        """Executes synchronous RAG question answering pipeline with Answer Cache."""
         if not query or not query.strip():
             raise ChatServiceError("User query cannot be empty.")
 
         t_service_start = time.perf_counter()
+
+        # Check Answer Cache
+        cached_payload = answer_cache.get(query)
+        if cached_payload is not None:
+            ans_text, cached_sources = cached_payload
+            t_cache = time.perf_counter() - t_service_start
+            logger.info(f"[ANSWER CACHE HIT] Returned answer in {t_cache:.4f}s for '{query[:40]}...'")
+            return ChatServiceResult(
+                answer=ans_text,
+                sources=cached_sources,
+                confidence=1.0,
+                timing={
+                    "cache_hit": 1.0,
+                    "cache_lookup": round(t_cache, 4),
+                    "chat_service_total": round(t_cache, 4),
+                },
+            )
 
         try:
             logger.info("[RAG STEP] RETRIEVAL START")
@@ -117,6 +135,9 @@ class ChatService:
                 "chat_service_total": round(time.perf_counter() - t_service_start, 4),
             }
 
+            # Put in answer cache
+            answer_cache.put(query, answer, sources)
+
             return ChatServiceResult(
                 answer=answer,
                 sources=sources,
@@ -135,11 +156,28 @@ class ChatService:
         top_k: int = settings.RETRIEVAL_TOP_K,
         top_n: int = settings.RETRIEVAL_RERANK_TOP_N,
     ) -> ChatServiceResult:
-        """Executes asynchronous RAG question answering pipeline with explicit step instrumentation."""
+        """Executes asynchronous RAG question answering pipeline with Answer Cache."""
         if not query or not query.strip():
             raise ChatServiceError("User query cannot be empty.")
 
         t_service_start = time.perf_counter()
+
+        # Check Answer Cache
+        cached_payload = answer_cache.get(query)
+        if cached_payload is not None:
+            ans_text, cached_sources = cached_payload
+            t_cache = time.perf_counter() - t_service_start
+            logger.info(f"[ANSWER CACHE HIT] Returned answer in {t_cache:.4f}s for '{query[:40]}...'")
+            return ChatServiceResult(
+                answer=ans_text,
+                sources=cached_sources,
+                confidence=1.0,
+                timing={
+                    "cache_hit": 1.0,
+                    "cache_lookup": round(t_cache, 4),
+                    "chat_service_total": round(t_cache, 4),
+                },
+            )
 
         try:
             logger.info("[RAG STEP] RETRIEVAL START")
@@ -185,6 +223,9 @@ class ChatService:
                 "llm_generation": round(t_llm_generation, 4),
                 "chat_service_total": round(time.perf_counter() - t_service_start, 4),
             }
+
+            # Put in answer cache
+            answer_cache.put(query, answer, sources)
 
             return ChatServiceResult(
                 answer=answer,

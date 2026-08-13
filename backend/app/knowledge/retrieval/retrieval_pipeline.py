@@ -1,11 +1,12 @@
-"""Retrieval Pipeline coordinator orchestrating Phase 5 Knowledge Retrieval Engine."""
+"""Retrieval Pipeline coordinator orchestrating Phase 5 Knowledge Retrieval Engine with deterministic Query Decomposition."""
 
 import time
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from app.config import settings
 from app.knowledge.exceptions import RetrievalPipelineError
 from app.knowledge.models.retrieval_result import RetrievalResult
 from app.knowledge.retrieval.context_builder import ContextBuilder
+from app.knowledge.retrieval.query_decomposer import QueryDecomposer
 from app.knowledge.retrieval.query_embedder import QueryEmbedder
 from app.knowledge.retrieval.query_processor import QueryProcessor
 from app.knowledge.retrieval.reranker import Reranker
@@ -15,7 +16,7 @@ from app.utils.logging import logger
 
 
 class RetrievalPipeline:
-    """Orchestrates Phase 5 Knowledge Retrieval pipeline: Query -> Normalize -> Embed -> VectorSearch -> Rerank -> ContextBuilder -> RetrievalResult."""
+    """Orchestrates Phase 5 Knowledge Retrieval pipeline: Query -> Decompose -> Embed Subqueries -> VectorSearch -> Merge/Deduplicate -> Rerank -> ContextBuilder -> RetrievalResult."""
 
     def __init__(
         self,
@@ -24,6 +25,7 @@ class RetrievalPipeline:
         vector_search: Optional[VectorSearch] = None,
         reranker: Optional[Reranker] = None,
         context_builder: Optional[ContextBuilder] = None,
+        query_decomposer: Optional[QueryDecomposer] = None,
     ):
         """Initializes RetrievalPipeline with injected module components."""
         self.query_processor = query_processor or QueryProcessor()
@@ -31,6 +33,7 @@ class RetrievalPipeline:
         self.vector_search = vector_search or VectorSearch()
         self.reranker = reranker or Reranker()
         self.context_builder = context_builder or ContextBuilder()
+        self.query_decomposer = query_decomposer or QueryDecomposer()
 
     def retrieve(
         self,
@@ -40,35 +43,67 @@ class RetrievalPipeline:
         top_n: int = settings.RETRIEVAL_RERANK_TOP_N,
         token_budget: int = settings.RETRIEVAL_CONTEXT_TOKEN_BUDGET,
     ) -> RetrievalResult:
-        """Executes full Knowledge Retrieval Engine pipeline for a user question with high-resolution timing."""
+        """Executes full Knowledge Retrieval Engine pipeline supporting multi-query decomposition with high-resolution timing."""
         pipeline_start = time.perf_counter()
         logger.info(f"=== Starting Knowledge Retrieval Engine for query: '{query[:60]}...' ===")
 
         try:
-            # Stage 1: Query Processor
+            # Stage 1: Query Processor & Query Decomposition
             t0 = time.perf_counter()
             processed_query = self.query_processor.process(query)
+
+            # Query Decomposition
+            subqueries = self.query_decomposer.decompose(processed_query.normalized_query)
+            subquery_count = len(subqueries)
+
+            subquery_log = [
+                f"\n[QUERY DECOMPOSITION]\noriginal={processed_query.normalized_query}\nsubquery_count={subquery_count}"
+            ]
+            for idx, sq in enumerate(subqueries, start=1):
+                subquery_log.append(f"subquery_{idx}={sq}")
+            logger.info("\n".join(subquery_log))
+
             t_qp = time.perf_counter() - t0
 
-            # Stage 2: Query Embedder
-            t1 = time.perf_counter()
-            query_vector = self.query_embedder.embed_query(processed_query)
-            dimension = self.query_embedder.get_dimension()
-            t_embed = time.perf_counter() - t1
+            # Stage 2 & 3: Independent Subquery Embedding & Vector Search
+            t_embed_total = 0.0
+            t_search_total = 0.0
+            merged_raw_matches = []
+            seen_keys = set()
+            dimension = 384
 
-            # Stage 3: Vector Search
-            t2 = time.perf_counter()
-            raw_matches = self.vector_search.search(
-                query_vector=query_vector,
-                top_k=top_k,
-                filters=filters,
-            )
-            t_search = time.perf_counter() - t2
+            for sq in subqueries:
+                sq_processed = self.query_processor.process(sq)
 
-            # Stage 4: Reranker
+                t1 = time.perf_counter()
+                sq_vector = self.query_embedder.embed_query(sq_processed)
+                dimension = self.query_embedder.get_dimension()
+                t_embed_total += time.perf_counter() - t1
+
+                t2 = time.perf_counter()
+                sq_matches = self.vector_search.search(
+                    query_vector=sq_vector,
+                    top_k=top_k,
+                    filters=filters,
+                )
+                t_search_total += time.perf_counter() - t2
+
+                logger.info(
+                    f"\n[RETRIEVAL]\nsubquery='{sq}'\ncandidate_count={len(sq_matches)}"
+                )
+
+                # Deduplicate candidates across subqueries
+                for match in sq_matches:
+                    pages_tuple = tuple(sorted(match.page_numbers)) if match.page_numbers else ()
+                    unique_key = (match.document_name, pages_tuple, match.chunk_id)
+                    if unique_key not in seen_keys:
+                        seen_keys.add(unique_key)
+                        merged_raw_matches.append(match)
+
+            # Stage 4: Reranker on Merged Candidates
             t3 = time.perf_counter()
             reranked_matches = self.reranker.rerank(
-                results=raw_matches,
+                results=merged_raw_matches,
                 query=processed_query,
                 top_n=top_n,
             )
@@ -86,8 +121,8 @@ class RetrievalPipeline:
 
             timing: Dict[str, float] = {
                 "query_processing": round(t_qp, 4),
-                "embedding": round(t_embed, 4),
-                "vector_search": round(t_search, 4),
+                "embedding": round(t_embed_total, 4),
+                "vector_search": round(t_search_total, 4),
                 "reranking": round(t_rerank, 4),
                 "context_building": round(t_context, 4),
                 "retrieval_total": round(total_elapsed, 4),
@@ -96,9 +131,9 @@ class RetrievalPipeline:
             result = RetrievalResult(
                 processed_query=processed_query,
                 embedding_dimension=dimension,
-                top_k_searched=len(raw_matches),
+                top_k_searched=len(merged_raw_matches),
                 top_n_reranked=len(reranked_matches),
-                raw_search_results=raw_matches,
+                raw_search_results=merged_raw_matches,
                 reranked_results=reranked_matches,
                 context_package=context_package,
                 processing_time=round(total_elapsed, 3),
@@ -107,7 +142,7 @@ class RetrievalPipeline:
 
             logger.info(
                 f"=== Completed Knowledge Retrieval Engine === "
-                f"[QP: {t_qp:.3f}s, Embed: {t_embed:.3f}s, Search: {t_search:.3f}s, "
+                f"[QP: {t_qp:.3f}s, Embed: {t_embed_total:.3f}s, Search: {t_search_total:.3f}s, "
                 f"Rerank: {t_rerank:.3f}s, Context: {t_context:.3f}s, Total: {total_elapsed:.3f}s]"
             )
             return result

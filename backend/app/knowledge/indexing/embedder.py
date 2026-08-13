@@ -1,7 +1,8 @@
-"""Local Embedding Generator using SentenceTransformers (BAAI/bge-small-en-v1.5)."""
+"""Local Embedding Generator using SentenceTransformers with thread-safe application-lifetime singleton loading."""
 
-from typing import List, Optional
-from sentence_transformers import SentenceTransformer
+import threading
+import time
+from typing import Any, List, Optional
 
 from app.config import settings
 from app.knowledge.exceptions import EmbeddingGeneratorError
@@ -9,76 +10,111 @@ from app.knowledge.models.embedding import Embedding
 from app.knowledge.models.knowledge_chunk import KnowledgeChunk
 from app.utils.logging import logger
 
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
 
 class EmbeddingGenerator:
-    """Generates dense vector embeddings locally using SentenceTransformers models."""
+    """Generates dense vector embeddings locally using SentenceTransformers models with thread-safe memory residency."""
 
-    _model_instance: Optional[SentenceTransformer] = None
+    _model_instance: Optional[Any] = None  # SentenceTransformer instance
     _loaded_model_name: Optional[str] = None
+    _lock: threading.Lock = threading.Lock()
+    _load_time_seconds: float = 0.0
 
     def __init__(self, model_name: str = settings.EMBEDDING_MODEL_NAME):
-        """Initializes the EmbeddingGenerator with a specified model name.
-
-        Args:
-            model_name (str): SentenceTransformers model name or path.
-        """
+        """Initializes EmbeddingGenerator with model name setting."""
         self.model_name = model_name
 
-    def get_model(self) -> SentenceTransformer:
-        """Loads and caches the SentenceTransformers model instance (Singleton pattern).
+    @classmethod
+    def preload_model(cls, model_name: str = settings.EMBEDDING_MODEL_NAME) -> None:
+        """Preloads and warms up the model during application startup."""
+        inst = cls(model_name=model_name)
+        inst.get_model()
 
-        Returns:
-            SentenceTransformer: Loaded model instance.
-
-        Raises:
-            EmbeddingGeneratorError: If model loading fails.
-        """
+    def get_model(self) -> Any:
+        """Loads and caches the SentenceTransformers model instance in memory (Thread-safe Singleton)."""
         if (
             EmbeddingGenerator._model_instance is None
             or EmbeddingGenerator._loaded_model_name != self.model_name
         ):
-            logger.info(f"Loading local SentenceTransformer model '{self.model_name}'...")
-            try:
-                EmbeddingGenerator._model_instance = SentenceTransformer(self.model_name)
-                EmbeddingGenerator._loaded_model_name = self.model_name
-                logger.info(
-                    f"Model '{self.model_name}' loaded successfully. "
-                    f"Vector dimension: {self.get_dimension()}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to load model '{self.model_name}': {e}")
-                raise EmbeddingGeneratorError(f"Error loading model '{self.model_name}': {str(e)}") from e
+            with EmbeddingGenerator._lock:
+                # Double-check inside lock
+                if (
+                    EmbeddingGenerator._model_instance is None
+                    or EmbeddingGenerator._loaded_model_name != self.model_name
+                ):
+                    t0 = time.perf_counter()
+                    logger.info(f"Loading local SentenceTransformer model '{self.model_name}'...")
+                    try:
+                        from sentence_transformers import SentenceTransformer
+                        EmbeddingGenerator._model_instance = SentenceTransformer(self.model_name)
+                        EmbeddingGenerator._loaded_model_name = self.model_name
+                        EmbeddingGenerator._load_time_seconds = time.perf_counter() - t0
+
+                        # Warmup dummy encode to force CUDA/CPU tensor initialization
+                        _ = EmbeddingGenerator._model_instance.encode(["warmup query"], show_progress_bar=False)
+
+                        dim = self.get_dimension()
+                        logger.info(
+                            f"\n[EMBEDDING]\n"
+                            f"model={self.model_name}\n"
+                            f"status=loaded\n"
+                            f"dimension={dim}\n"
+                            f"load_time={EmbeddingGenerator._load_time_seconds:.3f}s"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to load embedding model '{self.model_name}': {e}")
+                        raise EmbeddingGeneratorError(f"Error loading model '{self.model_name}': {str(e)}") from e
 
         return EmbeddingGenerator._model_instance
 
     def get_dimension(self) -> int:
-        """Obtains vector embedding dimension dynamically from the loaded model.
-
-        Returns:
-            int: Vector dimension (e.g. 384 for bge-small-en-v1.5).
-        """
+        """Obtains vector embedding dimension dynamically from loaded model."""
         model = self.get_model()
         if hasattr(model, "get_embedding_dimension"):
             return model.get_embedding_dimension()
         return model.get_sentence_embedding_dimension()
+
+    def encode_text(self, text: str) -> Any:
+        """Encodes single query text with inference optimization and timing."""
+        t0 = time.perf_counter()
+        model = self.get_model()
+
+        if HAS_TORCH:
+            with torch.no_grad():
+                raw_vec = model.encode(
+                    text,
+                    show_progress_bar=False,
+                    convert_to_numpy=True,
+                    normalize_embeddings=False,
+                )
+        else:
+            raw_vec = model.encode(
+                text,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+                normalize_embeddings=False,
+            )
+
+        duration = time.perf_counter() - t0
+        logger.debug(
+            f"\n[EMBEDDING]\n"
+            f"query='{text[:40]}...'\n"
+            f"duration={duration:.4f}s\n"
+            f"cache_hit=False"
+        )
+        return raw_vec
 
     def generate_embeddings(
         self,
         chunks: List[KnowledgeChunk],
         batch_size: int = settings.EMBEDDING_BATCH_SIZE,
     ) -> List[Embedding]:
-        """Generates dense vector embeddings for a list of KnowledgeChunk objects in batches.
-
-        Args:
-            chunks (List[KnowledgeChunk]): List of input KnowledgeChunk objects.
-            batch_size (int): Batch size for model inference.
-
-        Returns:
-            List[Embedding]: List of generated Embedding domain objects.
-
-        Raises:
-            EmbeddingGeneratorError: If embedding generation fails.
-        """
+        """Generates dense vector embeddings for KnowledgeChunks in batches."""
         if not chunks:
             return []
 
@@ -91,14 +127,23 @@ class EmbeddingGenerator:
             model = self.get_model()
             texts = [c.content for c in chunks]
 
-            # Run batch inference using SentenceTransformer.encode
-            vectors_np = model.encode(
-                texts,
-                batch_size=batch_size,
-                show_progress_bar=False,
-                convert_to_numpy=True,
-                normalize_embeddings=False,
-            )
+            if HAS_TORCH:
+                with torch.no_grad():
+                    vectors_np = model.encode(
+                        texts,
+                        batch_size=batch_size,
+                        show_progress_bar=False,
+                        convert_to_numpy=True,
+                        normalize_embeddings=False,
+                    )
+            else:
+                vectors_np = model.encode(
+                    texts,
+                    batch_size=batch_size,
+                    show_progress_bar=False,
+                    convert_to_numpy=True,
+                    normalize_embeddings=False,
+                )
 
             dimension = self.get_dimension()
             embeddings: List[Embedding] = []
