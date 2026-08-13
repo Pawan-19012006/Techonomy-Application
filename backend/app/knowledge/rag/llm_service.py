@@ -12,6 +12,7 @@ class LLMService:
         self,
         api_key: str = settings.OPENROUTER_API_KEY,
         model: str = settings.PRIMARY_MODEL,
+        fallback_model: Optional[str] = None,
         base_url: str = settings.OPENROUTER_BASE_URL,
         timeout_seconds: float = settings.LLM_TIMEOUT_SECONDS,
         max_retries: int = settings.LLM_MAX_RETRIES,
@@ -22,6 +23,7 @@ class LLMService:
         self.gateway = gateway or LLMGateway(
             api_key=api_key,
             primary_model=model,
+            fallback_model=fallback_model,
             base_url=base_url,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,

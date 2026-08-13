@@ -1,9 +1,10 @@
-"""LLMGateway handling model selection, HTTP connection reuse, retries with backoff, model fallback, and token streaming."""
+"""LLMGateway handling model selection, HTTP connection reuse, retries with backoff, model fallback, reasoning isolation at API level, and token streaming."""
 
 import asyncio
 import json
+import re
 import time
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, Optional, Tuple
 import httpx
 
 from app.config import settings
@@ -53,8 +54,44 @@ async def close_shared_clients() -> None:
         _shared_sync_client = None
 
 
+def extract_clean_answer(data: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    """Extracts clean final text content from OpenRouter response payload, discarding reasoning and recording execution metrics."""
+    if "choices" not in data or not data["choices"]:
+        raise OpenRouterAPIError("OpenRouter API returned empty choices list.")
+
+    choice = data["choices"][0]
+    message = choice.get("message", {})
+    finish_reason = choice.get("finish_reason", "unknown")
+
+    # Extract strictly message.content as the final answer
+    content = message.get("content", "") or ""
+
+    # Optional fallback clean up if model includes XML think tags inside content
+    if "<think>" in content:
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+
+    clean_content = content.strip()
+
+    if not clean_content:
+        raise OpenRouterAPIError("OpenRouter API returned empty text response.")
+
+    usage = data.get("usage", {})
+    details = usage.get("completion_tokens_details", {}) or {}
+    reasoning_tokens = details.get("reasoning_tokens", usage.get("reasoning_tokens", 0))
+
+    metrics = {
+        "finish_reason": finish_reason,
+        "prompt_tokens": usage.get("prompt_tokens"),
+        "completion_tokens": usage.get("completion_tokens"),
+        "reasoning_tokens": reasoning_tokens,
+        "total_tokens": usage.get("total_tokens"),
+    }
+
+    return clean_content, metrics
+
+
 class LLMGateway:
-    """Production LLM Gateway managing OpenRouter request execution, retries, exponential backoff, model fallback, and streaming."""
+    """Production LLM Gateway managing OpenRouter request execution, retries, exponential backoff, model fallback, API-level reasoning suppression, and streaming."""
 
     def __init__(
         self,
@@ -76,7 +113,7 @@ class LLMGateway:
         self.max_tokens = max_tokens
 
     def _build_payload(self, prompt: str, model_name: str, stream: bool = False) -> Dict[str, Any]:
-        """Constructs JSON request payload for OpenRouter chat completions."""
+        """Constructs JSON request payload for OpenRouter chat completions with reasoning suppressed at API level."""
         return {
             "model": model_name,
             "messages": [
@@ -88,6 +125,7 @@ class LLMGateway:
             "temperature": 0.1,
             "max_tokens": self.max_tokens,
             "stream": stream,
+            "reasoning": {"max_tokens": 0},
         }
 
     def _build_headers(self) -> Dict[str, str]:
@@ -114,23 +152,36 @@ class LLMGateway:
                 response.raise_for_status()
                 data = response.json()
 
-                if "choices" not in data or not data["choices"]:
-                    raise OpenRouterAPIError("OpenRouter API returned empty choices list.")
+                clean_answer, metrics = extract_clean_answer(data)
 
-                content = data["choices"][0]["message"]["content"]
-                if not content or not content.strip():
-                    raise OpenRouterAPIError("OpenRouter API returned empty text response.")
+                finish_reason = metrics.get("finish_reason", "unknown")
+                prompt_tokens = metrics.get("prompt_tokens")
+                completion_tokens = metrics.get("completion_tokens")
+                reasoning_tokens = metrics.get("reasoning_tokens")
+                total_tokens = metrics.get("total_tokens")
 
                 logger.info(
-                    f"\n[LLM]\n"
+                    f"\n[LLM GENERATION METRICS]\n"
                     f"provider=OpenRouter\n"
                     f"model={model_name}\n"
                     f"attempt={attempt_num}\n"
                     f"duration={duration:.3f}s\n"
                     f"status={status_code}\n"
+                    f"finish_reason={finish_reason}\n"
+                    f"prompt_tokens={prompt_tokens}\n"
+                    f"completion_tokens={completion_tokens}\n"
+                    f"reasoning_tokens={reasoning_tokens}\n"
+                    f"total_tokens={total_tokens}\n"
                     f"success=True"
                 )
-                return content.strip()
+
+                if finish_reason == "length":
+                    logger.warning(
+                        f"[LLM WARNING] Answer generation reached max_tokens limit ({self.max_tokens}) "
+                        f"for model '{model_name}' (finish_reason='length')!"
+                    )
+
+                return clean_answer
 
             except (httpx.TimeoutException, httpx.HTTPStatusError, Exception) as exc:
                 duration = time.perf_counter() - t_start
@@ -185,7 +236,7 @@ class LLMGateway:
                 raise OpenRouterAPIError(f"LLM generation failed across primary and fallback models: {primary_exc}") from fallback_exc
 
     async def generate_stream_async(self, prompt: str) -> AsyncGenerator[str, None]:
-        """Yields text tokens progressively as SSE chunks."""
+        """Yields text tokens progressively as SSE chunks while strictly filtering reasoning tokens."""
         if not prompt or not prompt.strip():
             yield "Prompt cannot be empty."
             return
@@ -210,8 +261,14 @@ class LLMGateway:
                         try:
                             data_json = json.loads(data_str)
                             delta = data_json["choices"][0]["delta"]
-                            if "content" in delta and delta["content"]:
-                                yield delta["content"]
+
+                            # Discard separate reasoning / thinking fields
+                            if "reasoning" in delta or "thinking" in delta or "reasoning_details" in delta:
+                                continue
+
+                            content_chunk = delta.get("content")
+                            if content_chunk:
+                                yield content_chunk
                         except Exception:
                             continue
         except Exception as e:
@@ -248,17 +305,36 @@ class LLMGateway:
                     response.raise_for_status()
                     data = response.json()
 
-                    content = data["choices"][0]["message"]["content"]
-                    if content and content.strip():
-                        logger.info(
-                            f"\n[LLM]\n"
-                            f"provider=OpenRouter\n"
-                            f"model={model_name}\n"
-                            f"duration={duration:.3f}s\n"
-                            f"status={status_code}\n"
-                            f"success=True"
+                    clean_answer, metrics = extract_clean_answer(data)
+
+                    finish_reason = metrics.get("finish_reason", "unknown")
+                    prompt_tokens = metrics.get("prompt_tokens")
+                    completion_tokens = metrics.get("completion_tokens")
+                    reasoning_tokens = metrics.get("reasoning_tokens")
+                    total_tokens = metrics.get("total_tokens")
+
+                    logger.info(
+                        f"\n[LLM GENERATION METRICS]\n"
+                        f"provider=OpenRouter\n"
+                        f"model={model_name}\n"
+                        f"attempt={attempt_num}\n"
+                        f"duration={duration:.3f}s\n"
+                        f"status={status_code}\n"
+                        f"finish_reason={finish_reason}\n"
+                        f"prompt_tokens={prompt_tokens}\n"
+                        f"completion_tokens={completion_tokens}\n"
+                        f"reasoning_tokens={reasoning_tokens}\n"
+                        f"total_tokens={total_tokens}\n"
+                        f"success=True"
+                    )
+
+                    if finish_reason == "length":
+                        logger.warning(
+                            f"[LLM WARNING] Answer generation reached max_tokens limit ({self.max_tokens}) "
+                            f"for model '{model_name}' (finish_reason='length')!"
                         )
-                        return content.strip()
+
+                    return clean_answer
                 except httpx.TimeoutException as exc:
                     duration = time.perf_counter() - t_start
                     logger.warning(f"Sync attempt {attempt_num} timed out for model '{model_name}' in {duration:.3f}s: {exc}")

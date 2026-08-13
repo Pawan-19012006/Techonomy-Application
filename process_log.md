@@ -384,7 +384,7 @@ This file records the development process, code changes, and rationale for all m
   - [chat_service.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/knowledge/rag/chat_service.py): Measured `prompt_building`, `llm_generation`, `chat_service_total`, and returned `timing` dict in `ChatServiceResult`.
   - [chat.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/api/chat.py): Measured request validation, `TeamService.log_prompt()`, and emitted structured `[RAG TIMING]` breakdown logs. Warns if database write exceeds 100ms.
 - **Empirical Diagnostics:**
-  - Identified **LLM API Response Time** (`cohere/north-mini-code:free` taking 13s–53s) as the primary bottleneck for warm queries.
+  - Identified **LLM API Response Time** (`nvidia/nemotron-3.5-lightning:free` taking 13s–53s) as the primary bottleneck for warm queries.
   - Identified **Cold-Start Embedding Model Loading** (`BAAI/bge-small-en-v1.5` taking 87s–107s on first query initialization) as the initial request bottleneck.
   - Verified **Database Logging** (`PromptLog`) is extremely fast (5ms–23ms) and contributes zero meaningful latency.
 - **Verification:**

@@ -78,13 +78,13 @@ class Settings(BaseSettings):
 
     # LLM Gateway & Provider Configuration
     OPENROUTER_API_KEY: str = "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"
-    PRIMARY_MODEL: str = "cohere/north-mini-code:free"
+    PRIMARY_MODEL: str = "nvidia/nemotron-3.5-lightning:free"
     FALLBACK_MODEL: str = "meta-llama/llama-3.2-3b-instruct:free"
-    OPENROUTER_MODEL: str = "cohere/north-mini-code:free"
+    OPENROUTER_MODEL: str = "nvidia/nemotron-3.5-lightning:free"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     LLM_TIMEOUT_SECONDS: float = 30.0
     LLM_MAX_RETRIES: int = 1
-    LLM_MAX_TOKENS: int = 1000
+    LLM_MAX_TOKENS: int = 500
 
     model_config = SettingsConfigDict(
         env_file=".env",
