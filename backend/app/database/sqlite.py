@@ -1,3 +1,5 @@
+"""Database configuration supporting Supabase PostgreSQL and SQLite fallback with connection pooling."""
+
 from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
@@ -5,14 +7,28 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from app.config import settings
 from app.utils.logging import logger
 
-# SQLite engine configuration (handles multi-threading for FastAPI request threads)
-connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+# Configure SQLAlchemy engine based on DATABASE_URL driver
+db_url = settings.DATABASE_URL.strip()
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args=connect_args,
-    echo=settings.SQL_ECHO
-)
+if db_url.startswith("postgresql"):
+    logger.info("Initializing SQLAlchemy engine for PostgreSQL (Supabase Pooler)...")
+    engine = create_engine(
+        db_url,
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+        echo=settings.SQL_ECHO,
+    )
+else:
+    logger.info("Initializing SQLAlchemy engine for SQLite...")
+    connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
+    engine = create_engine(
+        db_url,
+        connect_args=connect_args,
+        echo=settings.SQL_ECHO,
+    )
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -53,10 +69,10 @@ def seed_initial_data(db: Session) -> None:
 
 def init_db() -> None:
     """Initializes database tables according to SQLAlchemy Declarative models and seeds default data."""
-    logger.info("Initializing event database tables...")
+    logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
-    
+
     db = SessionLocal()
     try:
         seed_initial_data(db)
