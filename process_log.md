@@ -409,6 +409,21 @@ This file records the development process, code changes, and rationale for all m
   - Executed Pytest suite (**44/44 tests passed 100%**).
   - Executed `npm run build` (**0 errors**).
 
+---
+
+## ⚡ Step 26: RAG Quality Diagnosis & System Prompt Enhancement
+**Action:** Diagnosed compound query failures and evaluated evidence coverage for multi-part questions versus single-vector retrieval.
+- **System Prompt Rules Expanded:**
+  - Updated [app/prompts/system_prompt.txt](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/app/prompts/system_prompt.txt) to explicitly mandate structured sectioning for multi-part questions, strict prohibition of empty/fabricated tables, and claim-level citation association.
+- **Retrieval vs. Generation Diagnosis:**
+  - Evaluated compound query: *"Who are the current owners of the company? tell me more about the ownership details and marketing strategies of the company"*.
+  - Identified **RETRIEVAL** as the primary bottleneck for compound queries: A single dense query vector embeddings search retrieves chunks dominated by one topic (e.g., Shareholding/Ownership) while leaving secondary topics (Marketing Strategy) unretrieved.
+  - Identified **SYSTEM INSTRUCTION IMPROVEMENT** as effective for single-intent queries, ensuring missing evidence is explicitly stated without empty tables or false claims.
+- **Verification:**
+  - Ran diagnostic suite across 5 target queries ([scripts/diagnose_retrieval_and_generation.py](file:///Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/backend/scripts/diagnose_retrieval_and_generation.py)).
+  - Pytest test suite executed (**44/44 tests passed 100%**).
+
+
 
 
 

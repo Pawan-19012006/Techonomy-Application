@@ -24,7 +24,7 @@ class LLMService:
         base_url: str = settings.OPENROUTER_BASE_URL,
         timeout_seconds: float = settings.LLM_TIMEOUT_SECONDS,
         max_retries: int = settings.LLM_MAX_RETRIES,
-        max_tokens: int = 500,
+        max_tokens: int = 1000,
     ):
         """Initializes LLMService with OpenRouter settings."""
         self.api_key = api_key
