@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     # CORS Configuration: accepts List[str], JSON string, or comma-separated string
     CORS_ORIGINS: Union[List[str], str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "http://localhost:5173",
@@ -28,10 +30,21 @@ class Settings(BaseSettings):
         """Parses CORS_ORIGINS into a clean List[str]."""
         if isinstance(self.CORS_ORIGINS, str):
             val = self.CORS_ORIGINS.strip()
+            if not val:
+                return [
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000",
+                    "http://localhost:3001",
+                    "http://127.0.0.1:3001",
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                ]
             if val.startswith("[") and val.endswith("]"):
                 import json
                 try:
-                    return json.loads(val)
+                    res = json.loads(val)
+                    if isinstance(res, list):
+                        return [str(o).strip() for o in res if str(o).strip()]
                 except Exception:
                     pass
             return [origin.strip() for origin in val.split(",") if origin.strip()]

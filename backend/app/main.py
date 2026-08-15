@@ -83,7 +83,7 @@ async def root() -> Dict[str, str]:
 
 @app.get("/health", tags=["Health"], summary="Health Check Endpoint")
 async def health_check(db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """Health check endpoint verifying Backend, Database, Model, and Caches status."""
+    """Health check endpoint verifying Backend, Database, Qdrant, Model, and Caches status."""
     db_status = "healthy"
     try:
         db.execute(text("SELECT 1"))
@@ -91,12 +91,23 @@ async def health_check(db: Session = Depends(get_db)) -> Dict[str, Any]:
         logger.error(f"Health check DB probe failed: {e}")
         db_status = f"unhealthy: {str(e)}"
 
+    qdrant_status = "healthy"
+    try:
+        from app.knowledge.indexing.qdrant_client import QdrantClientWrapper
+        if not QdrantClientWrapper().health_check():
+            qdrant_status = "unhealthy"
+    except Exception as e:
+        logger.warning(f"Health check Qdrant probe failed: {e}")
+        qdrant_status = f"unhealthy: {str(e)}"
+
     model_loaded = EmbeddingGenerator._model_instance is not None
+    overall_healthy = (db_status == "healthy") and model_loaded and (qdrant_status == "healthy")
 
     return {
-        "status": "healthy" if db_status == "healthy" and model_loaded else "degraded",
+        "status": "healthy" if overall_healthy else "degraded",
         "backend": "healthy",
         "database": db_status,
+        "qdrant": qdrant_status,
         "embedding_model": {
             "name": settings.EMBEDDING_MODEL_NAME,
             "status": "loaded" if model_loaded else "unloaded",
