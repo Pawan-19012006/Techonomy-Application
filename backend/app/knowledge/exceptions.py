@@ -151,6 +151,11 @@ class LLMTimeoutError(LLMServiceError):
     pass
 
 
+class LLMQuotaExhaustedError(LLMServiceError):
+    """Raised when all LLM capacity pools (Gemini primary and Nemotron fallback) are exhausted or unavailable."""
+    pass
+
+
 class ChatServiceError(KnowledgeEngineError):
     """Raised when ChatService orchestration fails."""
     pass

@@ -37,3 +37,8 @@ class LLMService:
     async def generate_async(self, prompt: str, raise_on_missing_key: bool = False) -> str:
         """Executes asynchronous text generation via LLMGateway."""
         return await self.gateway.generate_async(prompt)
+
+    def get_status(self):
+        """Returns scheduler telemetry status report."""
+        return self.gateway.scheduler.get_status()
+
