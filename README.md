@@ -187,4 +187,28 @@ cd backend
 PYTHONPATH=. .venv/bin/python -m pytest tests/
 ```
 
-Baseline: **122 / 122 tests passing**.
+Baseline: **127 / 127 tests passing**.
+
+---
+
+## 13. Real LLM Provider Credential Validation
+
+To execute validation tests against live external APIs (Gemini 2.0 Flash & OpenRouter Nemotron 3.5):
+
+1. Configure real API credentials in `.env`:
+   ```env
+   GEMINI_API_KEY="your-live-gemini-api-key"
+   OPENROUTER_API_KEY="your-live-openrouter-api-key"
+   ```
+2. Run live validation via local Python virtual environment:
+   ```bash
+   cd backend
+   PYTHONPATH=. .venv/bin/python -m pytest tests/test_real_providers.py -v
+   ```
+3. Or run live validation inside the active Docker Compose container stack:
+   ```bash
+   docker compose exec backend python -m pytest tests/test_real_providers.py -v
+   ```
+
+> **Note**: Real provider tests require active internet connectivity and valid API keys. If keys are missing, tests will cleanly skip without failing.
+

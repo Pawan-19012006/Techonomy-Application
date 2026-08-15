@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     RETRIEVAL_MINIMUM_SIMILARITY: float = 0.3
 
     # LLM Gateway & Provider Configuration
-    OPENROUTER_API_KEY: str = "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"
+    OPENROUTER_API_KEY: str = ""
     PRIMARY_MODEL: str = "nvidia/nemotron-3.5-lightning:free"
     FALLBACK_MODEL: str = "meta-llama/llama-3.2-3b-instruct:free"
     OPENROUTER_MODEL: str = "nvidia/nemotron-3.5-lightning:free"
@@ -101,7 +101,7 @@ class Settings(BaseSettings):
 
     # Quota-Aware LLM Gateway & Scheduler Configuration
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
     GEMINI_ENABLED: bool = True
     GEMINI_TEST_REQUEST_LIMIT: int = 3
     GEMINI_MAX_CONCURRENT_REQUESTS: int = 1

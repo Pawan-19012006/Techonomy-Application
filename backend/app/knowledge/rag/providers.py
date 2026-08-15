@@ -17,12 +17,19 @@ _shared_sync_client: Optional[httpx.Client] = None
 def get_shared_async_client() -> httpx.AsyncClient:
     """Returns or creates shared httpx.AsyncClient with connection pooling."""
     global _shared_async_client
-    if _shared_async_client is None or _shared_async_client.is_closed:
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if _shared_async_client is None or _shared_async_client.is_closed or getattr(_shared_async_client, "_loop", None) != loop:
         limits = httpx.Limits(max_keepalive_connections=20, max_connections=50)
         _shared_async_client = httpx.AsyncClient(
             limits=limits,
             timeout=settings.LLM_TIMEOUT_SECONDS,
         )
+        setattr(_shared_async_client, "_loop", loop)
     return _shared_async_client
 
 
@@ -82,6 +89,17 @@ def extract_clean_answer(data: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
     }
 
     return clean_content, metrics
+
+
+def _sanitize_credential_error(exc: Exception, api_key: str) -> Exception:
+    """Masks raw API keys in exception messages to ensure credential privacy."""
+    if not api_key:
+        return exc
+    err_str = str(exc)
+    if api_key in err_str:
+        clean_str = err_str.replace(api_key, "[REDACTED_API_KEY]")
+        return LLMServiceError(f"Provider API Exception: {clean_str}")
+    return exc
 
 
 
@@ -290,7 +308,7 @@ class GeminiProviderAdapter(LLMProvider):
                     continue
 
         if isinstance(last_exc, Exception):
-            raise last_exc
+            raise _sanitize_credential_error(last_exc, api_key)
         raise LLMServiceError("Gemini generation failed across configured retries.")
 
     def generate(
@@ -330,11 +348,11 @@ class GeminiProviderAdapter(LLMProvider):
                     time.sleep(0.5 * (2 ** attempt))
                     continue
             except Exception as exc:
-                last_exc = exc
+                last_exc = _sanitize_credential_error(exc, api_key)
                 if attempt < max_retries:
                     time.sleep(0.5 * (2 ** attempt))
                     continue
 
         if isinstance(last_exc, Exception):
-            raise last_exc
+            raise _sanitize_credential_error(last_exc, api_key)
         raise LLMServiceError("Gemini generation failed across configured retries.")

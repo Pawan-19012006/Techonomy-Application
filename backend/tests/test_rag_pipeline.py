@@ -87,6 +87,8 @@ def test_prompt_builder_empty_query():
         builder.build_prompt("   ", [])
 
 
+@patch("app.knowledge.rag.llm_gateway.settings.GEMINI_ENABLED", False)
+@patch("app.knowledge.rag.llm_gateway.settings.GEMINI_API_KEY", "")
 def test_llm_service_missing_api_key():
     """Tests LLMService exception raising when OPENROUTER_API_KEY is not configured."""
     service = LLMService(api_key="")
@@ -95,6 +97,7 @@ def test_llm_service_missing_api_key():
 
 
 
+@patch("app.knowledge.rag.llm_gateway.settings.GEMINI_ENABLED", False)
 @patch("httpx.Client.post")
 def test_llm_service_successful_generation(mock_post):
     """Tests successful LLMService text generation via OpenRouter API."""

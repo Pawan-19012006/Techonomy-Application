@@ -117,6 +117,8 @@ class QuotaScheduler:
                     db.add(db_model)
                 else:
                     rec = db_lanes[lane_id]
+                    rec.enabled = lane.enabled
+                    rec.model = lane.model
                     lane.requests_used = rec.requests_used
                     lane.active_requests = rec.active_requests
                     lane.error_count = rec.error_count
@@ -147,6 +149,8 @@ class QuotaScheduler:
                     db.add(db_model)
                 else:
                     rec = db_lanes[lane_id]
+                    rec.enabled = lane.enabled
+                    rec.model = lane.model
                     lane.requests_used = rec.requests_used
                     lane.active_requests = rec.active_requests
                     lane.error_count = rec.error_count
