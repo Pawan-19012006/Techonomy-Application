@@ -3,7 +3,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from app.database.models import PromptLogModel, TeamModel, utc_now
+from app.database.models import PromptLogModel, TeamModel, TeamQuotaModel, utc_now
 from app.utils.logging import logger
 
 
@@ -98,3 +98,110 @@ class TeamService:
         db.refresh(log_entry)
         logger.info(f"Logged prompt entry #{log_entry.id} for Team '{team_name}'")
         return log_entry
+
+    @staticmethod
+    def get_or_create_team_quota(
+        db: Session,
+        team_name: str,
+        event_id: Optional[int] = None,
+        default_limit: int = 10,
+    ) -> TeamQuotaModel:
+        """Retrieves or creates TeamQuotaModel record for team/event."""
+        from sqlalchemy.exc import IntegrityError
+        from app.database.models import TeamQuotaModel, EventModel
+
+        clean_name = team_name.strip()
+
+        # Check event default limit if event_id provided
+        if event_id is not None:
+            evt = db.query(EventModel).filter(EventModel.id == event_id).first()
+            if evt:
+                default_limit = evt.question_limit
+
+        query = db.query(TeamQuotaModel).filter(TeamQuotaModel.team_name == clean_name)
+        if event_id is not None:
+            query = query.filter(TeamQuotaModel.event_id == event_id)
+        else:
+            query = query.filter(TeamQuotaModel.event_id.is_(None))
+
+        existing = query.first()
+        if existing:
+            return existing
+
+        try:
+            new_quota = TeamQuotaModel(
+                team_name=clean_name,
+                event_id=event_id,
+                questions_used=0,
+                question_limit=default_limit,
+                created_at=utc_now(),
+                updated_at=utc_now(),
+            )
+            db.add(new_quota)
+            db.commit()
+            db.refresh(new_quota)
+            return new_quota
+        except IntegrityError:
+            db.rollback()
+            return query.first()
+
+    @staticmethod
+    def reserve_team_quota(
+        db: Session,
+        team_name: str,
+        event_id: Optional[int] = None,
+    ) -> bool:
+        """Atomically reserves one prompt slot for a team if questions_used < question_limit."""
+        from sqlalchemy import update
+        from app.database.models import TeamQuotaModel
+
+        clean_name = team_name.strip()
+        TeamService.get_or_create_team_quota(db, clean_name, event_id)
+
+        stmt = update(TeamQuotaModel).where(
+            TeamQuotaModel.team_name == clean_name,
+            TeamQuotaModel.questions_used < TeamQuotaModel.question_limit,
+        )
+        if event_id is not None:
+            stmt = stmt.where(TeamQuotaModel.event_id == event_id)
+        else:
+            stmt = stmt.where(TeamQuotaModel.event_id.is_(None))
+
+        stmt = stmt.values(
+            questions_used=TeamQuotaModel.questions_used + 1,
+            updated_at=utc_now(),
+        )
+
+        res = db.execute(stmt)
+        db.commit()
+        return res.rowcount == 1
+
+    @staticmethod
+    def rollback_team_quota(
+        db: Session,
+        team_name: str,
+        event_id: Optional[int] = None,
+    ) -> bool:
+        """Atomically rolls back one prompt slot for a team (questions_used = max(0, questions_used - 1))."""
+        from sqlalchemy import update
+        from app.database.models import TeamQuotaModel
+
+        clean_name = team_name.strip()
+        stmt = update(TeamQuotaModel).where(
+            TeamQuotaModel.team_name == clean_name,
+            TeamQuotaModel.questions_used > 0,
+        )
+        if event_id is not None:
+            stmt = stmt.where(TeamQuotaModel.event_id == event_id)
+        else:
+            stmt = stmt.where(TeamQuotaModel.event_id.is_(None))
+
+        stmt = stmt.values(
+            questions_used=TeamQuotaModel.questions_used - 1,
+            updated_at=utc_now(),
+        )
+
+        res = db.execute(stmt)
+        db.commit()
+        return res.rowcount == 1
+

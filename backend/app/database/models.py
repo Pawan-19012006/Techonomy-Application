@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.sqlite import Base
@@ -101,3 +101,52 @@ class AuditLogModel(Base):
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class LLMLaneModel(Base):
+    """SQLAlchemy model representing persistent operational state of an LLM lane."""
+
+    __tablename__ = "llm_lanes"
+    __table_args__ = (
+        Index("idx_provider_lane", "provider", "lane_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    lane_id: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    credential_ref: Mapped[str] = mapped_column(String(100), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    daily_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    max_concurrent_requests: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    requests_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    active_requests: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    state: Mapped[str] = mapped_column(String(50), default="AVAILABLE", nullable=False)
+    cooldown_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class TeamQuotaModel(Base):
+    """SQLAlchemy model representing persistent team prompt quota for an event."""
+
+    __tablename__ = "team_quotas"
+    __table_args__ = (
+        UniqueConstraint("event_id", "team_name", name="uq_event_team"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    team_name: Mapped[str] = mapped_column(
+        String(100), ForeignKey("teams.team_name", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    questions_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    question_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+

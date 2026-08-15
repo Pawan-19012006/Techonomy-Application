@@ -67,6 +67,16 @@ async def process_chat_query(
         team = TeamService.join_team(db=db, team_name=requested_team_name, member_names=[requested_team_name])
 
     active_team_name = str(team.team_name)
+
+    # 1. Atomically reserve team prompt quota
+    reserved = TeamService.reserve_team_quota(db=db, team_name=active_team_name)
+    if not reserved:
+        logger.warning(f"[QUOTA EXCEEDED] Team '{active_team_name}' exceeded prompt question limit.")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Team prompt question limit reached for this event.",
+        )
+
     t_validation = time.perf_counter() - t_req_start
 
     chat_service = ChatService()
@@ -116,6 +126,12 @@ async def process_chat_query(
         )
 
     except Exception as e:
+        # Check if pre-generation LLM acquisition failed -> Roll back team prompt quota
+        from app.knowledge.exceptions import LLMQuotaExhaustedError
+        if isinstance(e, (LLMQuotaExhaustedError, ChatServiceError)) and "LLMQuotaExhaustedError" in str(e):
+            logger.warning(f"[PRE-GENERATION ROLLBACK] Rolling back quota for Team '{active_team_name}' due to lane acquisition failure: {e}")
+            TeamService.rollback_team_quota(db=db, team_name=active_team_name)
+
         logger.error(f"[RAG STEP] CHAT REQUEST FAILED for Team '{active_team_name}': {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
