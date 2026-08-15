@@ -169,6 +169,7 @@ def test_real_fallback_path():
 
         finally:
             # Restore original database state
+            db.rollback()
             for lane_id, (state, used) in original_states.items():
                 row = db.query(LLMLaneModel).filter(LLMLaneModel.lane_id == lane_id).first()
                 if row:

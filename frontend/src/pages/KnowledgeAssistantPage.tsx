@@ -3,8 +3,8 @@ import { Bot, Sparkles, Trash2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { ChatMessage } from '../components/chat/ChatMessage';
 import { ChatInput } from '../components/chat/ChatInput';
-import { ChatMessage as ChatMessageType } from '../types';
-import { sendChatMessage } from '../services/api';
+import { ChatMessage as ChatMessageType, SourceItem } from '../types';
+import { sendChatMessage, sendChatMessageStream } from '../services/api';
 import { toast } from 'sonner';
 
 const CHAT_HISTORY_KEY = 'techonomy_chat_history';
@@ -13,7 +13,7 @@ const DEFAULT_INITIAL_MESSAGES: ChatMessageType[] = [
   {
     id: '1',
     sender: 'assistant',
-    text: "Hello Team! I'm your AI Knowledge Assistant. Ask me anything about the company documents.",
+    text: "Hello Team! I'm your **AI Knowledge Assistant**. Ask me anything about your uploaded company documents, financial figures, or event metrics.",
     timestamp: '09:00 AM',
   },
 ];
@@ -21,6 +21,7 @@ const DEFAULT_INITIAL_MESSAGES: ChatMessageType[] = [
 export const KnowledgeAssistantPage: React.FC = () => {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
 
   const [messages, setMessages] = useState<ChatMessageType[]>(() => {
     const saved = localStorage.getItem(CHAT_HISTORY_KEY);
@@ -50,57 +51,91 @@ export const KnowledgeAssistantPage: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isSubmitting]);
+  }, [messages, isSubmitting, streamingMsgId]);
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || isSubmitting) return;
 
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const userMsg: ChatMessageType = {
       id: Date.now().toString(),
       sender: 'user',
       text: text.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp,
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const assistantMsgId = (Date.now() + 1).toString();
+    const assistantPlaceholder: ChatMessageType = {
+      id: assistantMsgId,
+      sender: 'assistant',
+      text: '',
+      timestamp,
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantPlaceholder]);
     setIsSubmitting(true);
+    setStreamingMsgId(assistantMsgId);
 
     const activeTeamName = user?.team_name || (() => {
       const stored = localStorage.getItem('techonomy_team');
       return stored ? JSON.parse(stored).team_name : 'TEAM-01';
     })();
 
-    try {
-      const response = await sendChatMessage(activeTeamName, text.trim());
+    let accumulatedText = '';
 
-      const assistantMsg: ChatMessageType = {
-        id: (Date.now() + 1).toString(),
-        sender: 'assistant',
-        text: response.answer,
-        sources: response.sources,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
+    await sendChatMessageStream(activeTeamName, text.trim(), {
+      onChunk: (token: string) => {
+        accumulatedText += token;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId ? { ...msg, text: accumulatedText } : msg
+          )
+        );
+      },
+      onComplete: (sources: SourceItem[]) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId ? { ...msg, sources } : msg
+          )
+        );
+        setStreamingMsgId(null);
+        setIsSubmitting(false);
+      },
+      onError: async (streamErr: Error) => {
+        console.warn('Streaming connection issue, attempting REST fallback:', streamErr);
+        // Fallback to synchronous REST /api/chat if streaming had no tokens
+        if (!accumulatedText.trim()) {
+          try {
+            const restResponse = await sendChatMessage(activeTeamName, text.trim());
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId
+                  ? { ...msg, text: restResponse.answer, sources: restResponse.sources }
+                  : msg
+              )
+            );
+          } catch (restErr: any) {
+            console.error('REST Chat error:', restErr);
+            const userFacingMsg =
+              restErr?.userMessage ||
+              restErr?.response?.data?.detail ||
+              streamErr.message ||
+              'Unable to connect to the Techonomy server. Please try again.';
 
-      setMessages((prev) => [...prev, assistantMsg]);
-    } catch (err: any) {
-      console.error('Chat error:', err);
-      const userFacingMsg =
-        err?.userMessage ||
-        err?.response?.data?.detail ||
-        'Unable to connect to the Techonomy server. Please try again.';
-
-      toast.error(userFacingMsg);
-
-      const errorMsg: ChatMessageType = {
-        id: (Date.now() + 1).toString(),
-        sender: 'assistant',
-        text: `⚠️ ${userFacingMsg}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsSubmitting(false);
-    }
+            toast.error(userFacingMsg);
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId
+                  ? { ...msg, text: `⚠️ ${userFacingMsg}` }
+                  : msg
+              )
+            );
+          }
+        }
+        setStreamingMsgId(null);
+        setIsSubmitting(false);
+      },
+    });
   };
 
   const handleClearHistory = () => {
@@ -140,10 +175,14 @@ export const KnowledgeAssistantPage: React.FC = () => {
       {/* Chat Messages Log Area */}
       <div className="flex-1 overflow-y-auto pr-2 space-y-2 rounded-xl">
         {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
+          <ChatMessage
+            key={msg.id}
+            message={msg}
+            isStreaming={streamingMsgId === msg.id}
+          />
         ))}
 
-        {isSubmitting && (
+        {isSubmitting && !streamingMsgId && (
           <div className="flex items-center gap-3 my-4 text-slate-400 text-xs pl-2">
             <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center animate-pulse">
               <Sparkles className="w-4 h-4" />

@@ -1,5 +1,5 @@
 import { apiClient } from '../api/axios';
-import { ChatResponse, PromptLog, TeamData } from '../types';
+import { ChatResponse, PromptLog, SourceItem, TeamData } from '../types';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
@@ -16,7 +16,7 @@ export const joinTeam = async (team_name: string, member_names: string[]): Promi
 };
 
 /**
- * 2. Submit RAG Chat Question
+ * 2. Submit RAG Chat Question (REST synchronous fallback)
  * POST /api/chat
  */
 export const sendChatMessage = async (team_name: string, question: string): Promise<ChatResponse> => {
@@ -25,6 +25,81 @@ export const sendChatMessage = async (team_name: string, question: string): Prom
     question,
   });
   return response.data;
+};
+
+export interface StreamHandlers {
+  onChunk: (token: string) => void;
+  onComplete: (sources: SourceItem[], teamName: string) => void;
+  onError: (error: Error) => void;
+}
+
+/**
+ * 2b. Submit RAG Chat Question with SSE Token Streaming
+ * POST /api/chat/stream
+ */
+export const sendChatMessageStream = async (
+  team_name: string,
+  question: string,
+  handlers: StreamHandlers
+): Promise<void> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ team_name, question }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let msg = 'Failed to connect to chat stream.';
+      try {
+        const parsed = JSON.parse(errorText);
+        msg = parsed.detail || msg;
+      } catch (e) {
+        msg = errorText || msg;
+      }
+      throw new Error(msg);
+    }
+
+    if (!response.body) {
+      throw new Error('No response body received for streaming.');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const jsonStr = trimmed.slice(6);
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data.token) {
+              handlers.onChunk(data.token);
+            }
+            if (data.done) {
+              handlers.onComplete(data.sources || [], data.team_name || team_name);
+            }
+          } catch (e) {
+            console.warn('Failed to parse SSE JSON chunk:', jsonStr, e);
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    handlers.onError(err instanceof Error ? err : new Error(String(err)));
+  }
 };
 
 /**

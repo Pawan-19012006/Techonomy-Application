@@ -95,6 +95,7 @@ class QuotaScheduler:
             db_lanes = {l.lane_id: l for l in db.query(LLMLaneModel).all()}
 
             # Synchronize Gemini pool
+            has_changes = False
             for lane_id, lane in self.gemini_pool.items():
                 if lane_id not in db_lanes:
                     db_model = LLMLaneModel(
@@ -115,10 +116,13 @@ class QuotaScheduler:
                         updated_at=utc_now(),
                     )
                     db.add(db_model)
+                    has_changes = True
                 else:
                     rec = db_lanes[lane_id]
-                    rec.enabled = lane.enabled
-                    rec.model = lane.model
+                    if rec.enabled != lane.enabled or rec.model != lane.model:
+                        rec.enabled = lane.enabled
+                        rec.model = lane.model
+                        has_changes = True
                     lane.requests_used = rec.requests_used
                     lane.active_requests = rec.active_requests
                     lane.error_count = rec.error_count
@@ -147,10 +151,13 @@ class QuotaScheduler:
                         updated_at=utc_now(),
                     )
                     db.add(db_model)
+                    has_changes = True
                 else:
                     rec = db_lanes[lane_id]
-                    rec.enabled = lane.enabled
-                    rec.model = lane.model
+                    if rec.enabled != lane.enabled or rec.model != lane.model:
+                        rec.enabled = lane.enabled
+                        rec.model = lane.model
+                        has_changes = True
                     lane.requests_used = rec.requests_used
                     lane.active_requests = rec.active_requests
                     lane.error_count = rec.error_count
@@ -158,7 +165,12 @@ class QuotaScheduler:
                     if rec.cooldown_until:
                         lane.cooldown_until = rec.cooldown_until.timestamp()
 
-            db.commit()
+            if has_changes:
+                try:
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logger.debug(f"[SCHEDULER DB SYNC RETRY] Concurrent lane insertion conflict: {e}")
         except Exception as e:
             logger.error(f"[SCHEDULER DB SYNC ERROR] Failed to sync DB lanes: {e}")
             db.rollback()
@@ -199,13 +211,15 @@ class QuotaScheduler:
             )
         )
 
-        res = db.execute(stmt)
-        db.commit()
-
-        if res.rowcount == 1:
-            # Sync in-memory representation
-            lane.reserve_slot()
-            return True
+        try:
+            res = db.execute(stmt)
+            db.commit()
+            if res.rowcount == 1:
+                return True
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"[DB_LANE_RESERVE_RETRY] Database transaction conflict on lane '{lane.lane_id}': {e}")
+            return False
 
         return False
 

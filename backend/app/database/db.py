@@ -14,10 +14,10 @@ if db_url.startswith("postgresql"):
     logger.info("Initializing SQLAlchemy engine for PostgreSQL (Supabase Pooler)...")
     engine = create_engine(
         db_url,
-        pool_size=10,
-        max_overflow=20,
-        pool_timeout=30,
-        pool_recycle=1800,
+        pool_size=5,
+        max_overflow=0,
+        pool_timeout=10,
+        pool_recycle=60,
         pool_pre_ping=True,
         echo=settings.SQL_ECHO,
     )
@@ -64,7 +64,11 @@ def seed_initial_data(db: Session) -> None:
             member_names=["Pawan", "Rahul", "Kabilan"],
         )
         db.add(demo_team)
-        db.commit()
+        try:
+            db.commit()
+        except Exception as err:
+            db.rollback()
+            logger.debug(f"Default team seeding skipped (already exists): {err}")
 
 
 def init_db() -> None:

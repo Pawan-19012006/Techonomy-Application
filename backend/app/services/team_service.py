@@ -39,8 +39,14 @@ class TeamService:
             started_at=utc_now(),
         )
         db.add(new_team)
-        db.commit()
-        db.refresh(new_team)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            existing = db.query(TeamModel).filter(TeamModel.team_name == clean_name).first()
+            if existing:
+                return existing
+            raise
         return new_team
 
     @staticmethod
@@ -139,7 +145,6 @@ class TeamService:
             )
             db.add(new_quota)
             db.commit()
-            db.refresh(new_quota)
             return new_quota
         except IntegrityError:
             db.rollback()

@@ -5,7 +5,6 @@ import json
 import re
 import time
 from typing import Any, AsyncGenerator, Dict, Optional, Tuple
-import httpx
 
 from app.config import settings
 from app.knowledge.exceptions import (
@@ -25,7 +24,6 @@ from app.knowledge.rag.providers import (
 )
 from app.knowledge.rag.scheduler import QuotaScheduler
 from app.utils.logging import logger
-
 
 
 class LLMGateway:
@@ -88,6 +86,10 @@ class LLMGateway:
             f"[LLM_ROUTE] provider={lane.provider} lane={lane.lane_id} fallback={is_fallback} "
             f"active={lane.active_requests} remaining={lane.requests_remaining}"
         )
+        logger.info(
+            f"[LLM_GEN_START] provider={lane.provider} lane={lane.lane_id} fallback={is_fallback} "
+            f"model={lane.model} max_tokens={self.max_tokens}"
+        )
 
         adapter = self._get_adapter(lane.provider)
         t_start = time.perf_counter()
@@ -103,7 +105,10 @@ class LLMGateway:
             )
             duration = time.perf_counter() - t_start
             self.scheduler.release_lane(lane.lane_id, success=True)
-            logger.info(f"[LLM_COMPLETE] provider={lane.provider} lane={lane.lane_id} duration={duration:.3f}s success=True")
+            logger.info(
+                f"[LLM_COMPLETE] provider={lane.provider} lane={lane.lane_id} "
+                f"duration={duration:.3f}s success=True"
+            )
             return result
         except Exception as exc:
             duration = time.perf_counter() - t_start
@@ -122,6 +127,10 @@ class LLMGateway:
             f"[LLM_ROUTE] provider={lane.provider} lane={lane.lane_id} fallback={is_fallback} "
             f"active={lane.active_requests} remaining={lane.requests_remaining}"
         )
+        logger.info(
+            f"[LLM_GEN_START] provider={lane.provider} lane={lane.lane_id} fallback={is_fallback} "
+            f"model={lane.model} max_tokens={self.max_tokens}"
+        )
 
         adapter = self._get_adapter(lane.provider)
         t_start = time.perf_counter()
@@ -137,7 +146,10 @@ class LLMGateway:
             )
             duration = time.perf_counter() - t_start
             self.scheduler.release_lane(lane.lane_id, success=True)
-            logger.info(f"[LLM_COMPLETE] provider={lane.provider} lane={lane.lane_id} duration={duration:.3f}s success=True")
+            logger.info(
+                f"[LLM_COMPLETE] provider={lane.provider} lane={lane.lane_id} "
+                f"duration={duration:.3f}s success=True"
+            )
             return result
         except Exception as exc:
             duration = time.perf_counter() - t_start
@@ -157,54 +169,47 @@ class LLMGateway:
             f"[LLM_ROUTE_STREAM] provider={lane.provider} lane={lane.lane_id} fallback={is_fallback} "
             f"active={lane.active_requests} remaining={lane.requests_remaining}"
         )
+        logger.info(
+            f"[LLM_GEN_START_STREAM] provider={lane.provider} lane={lane.lane_id} fallback={is_fallback} "
+            f"model={lane.model} max_tokens={self.max_tokens}"
+        )
 
-        url = f"{self.base_url}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {key_val}",
-            "HTTP-Referer": "https://techonomy.ai",
-            "X-Title": "Techonomy Enterprise Knowledge Platform",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": lane.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1,
-            "max_tokens": self.max_tokens,
-            "stream": True,
-            "reasoning": {"max_tokens": 0},
-        }
-
-        client = get_shared_async_client()
+        adapter = self._get_adapter(lane.provider)
+        t_start = time.perf_counter()
         stream_success = False
         last_error = None
+        chunk_count = 0
+        char_count = 0
+        last_finish_reason = None
 
         try:
-            async with client.stream("POST", url, headers=headers, json=payload, timeout=self.timeout_seconds) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data_str = line[6:].strip()
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            data_json = json.loads(data_str)
-                            delta = data_json["choices"][0]["delta"]
+            async for chunk, finish_reason in adapter.generate_stream_async(
+                prompt=prompt,
+                model=lane.model,
+                api_key=key_val,
+                timeout_seconds=self.timeout_seconds,
+                max_tokens=self.max_tokens,
+            ):
+                if finish_reason:
+                    last_finish_reason = finish_reason
 
-                            if "reasoning" in delta or "thinking" in delta or "reasoning_details" in delta:
-                                continue
+                if chunk:
+                    chunk_count += 1
+                    char_count += len(chunk)
+                    yield chunk
 
-                            content_chunk = delta.get("content")
-                            if content_chunk:
-                                yield content_chunk
-                        except Exception:
-                            continue
+            if last_finish_reason in ("MAX_TOKENS", "length"):
+                notice = f"\n\n*(Note: Output reached configured token limit of {self.max_tokens}. Ask a follow-up question for remaining details.)*"
+                char_count += len(notice)
+                yield notice
+
             stream_success = True
         except Exception as e:
             last_error = e
             logger.error(f"Streaming token generation failed for lane '{lane.lane_id}': {e}")
             yield f"\n[Streaming error: {str(e)}]"
         finally:
-            # Crucial requirement: Lane slot is released ONLY after stream completion, failure, or cancellation
+            duration = time.perf_counter() - t_start
             status_code = getattr(getattr(last_error, "response", None), "status_code", None)
             self.scheduler.release_lane(
                 lane.lane_id,
@@ -212,4 +217,8 @@ class LLMGateway:
                 status_code=status_code,
                 error=last_error,
             )
-            logger.info(f"[LLM_STREAM_COMPLETE] provider={lane.provider} lane={lane.lane_id} success={stream_success}")
+            logger.info(
+                f"[LLM_STREAM_COMPLETE] provider={lane.provider} lane={lane.lane_id} "
+                f"duration={duration:.3f}s chars={char_count} chunks={chunk_count} "
+                f"finish_reason={last_finish_reason} success={stream_success}"
+            )

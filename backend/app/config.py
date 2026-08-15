@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     LLM_TIMEOUT_SECONDS: float = 30.0
     LLM_MAX_RETRIES: int = 1
-    LLM_MAX_TOKENS: int = 500
+    LLM_MAX_TOKENS: int = 2048
 
     # Quota-Aware LLM Gateway & Scheduler Configuration
     GEMINI_API_KEY: str = ""

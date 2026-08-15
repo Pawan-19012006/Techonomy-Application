@@ -159,41 +159,57 @@ async def stream_chat_query(
         team = TeamService.join_team(db=db, team_name=requested_team_name, member_names=[requested_team_name])
 
     active_team_name = str(team.team_name)
+
+    # 1. Atomically reserve team prompt quota
+    reserved = TeamService.reserve_team_quota(db=db, team_name=active_team_name)
+    if not reserved:
+        logger.warning(f"[QUOTA EXCEEDED] Team '{active_team_name}' exceeded prompt question limit.")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Team prompt question limit reached for this event.",
+        )
+
     chat_service = ChatService()
 
     async def event_generator():
-        # Retrieve context
-        retrieval_result = chat_service.retrieval_pipeline.retrieve(query=question_text)
-        sources = chat_service._extract_sources(retrieval_result)
-        prompt = chat_service.prompt_builder.build_prompt(
-            query=question_text,
-            chunks=retrieval_result.reranked_results,
-        )
+        try:
+            # Retrieve context
+            retrieval_result = chat_service.retrieval_pipeline.retrieve(query=question_text)
+            sources = chat_service._extract_sources(retrieval_result)
+            prompt = chat_service.prompt_builder.build_prompt(
+                query=question_text,
+                chunks=retrieval_result.reranked_results,
+            )
 
-        gateway = LLMGateway()
-        full_answer = []
+            gateway = LLMGateway()
+            full_answer = []
 
-        # Yield SSE tokens
-        async for token in gateway.generate_stream_async(prompt):
-            full_answer.append(token)
-            yield f"data: {json.dumps({'token': token})}\n\n"
+            # Yield SSE tokens
+            async for token in gateway.generate_stream_async(prompt):
+                full_answer.append(token)
+                yield f"data: {json.dumps({'token': token})}\n\n"
 
-        complete_text = "".join(full_answer)
+            complete_text = "".join(full_answer)
 
-        # Schedule background logging
-        background_tasks.add_task(
-            _async_log_prompt,
-            team_name=active_team_name,
-            prompt=question_text,
-            response=complete_text,
-        )
+            # Schedule background logging
+            background_tasks.add_task(
+                _async_log_prompt,
+                team_name=active_team_name,
+                prompt=question_text,
+                response=complete_text,
+            )
 
-        # Emit completion payload with sources
-        final_payload = {
-            "done": True,
-            "sources": [s.model_dump() for s in sources],
-            "team_name": active_team_name,
-        }
-        yield f"data: {json.dumps(final_payload)}\n\n"
+            # Emit completion payload with sources
+            final_payload = {
+                "done": True,
+                "sources": [s.model_dump() for s in sources],
+                "team_name": active_team_name,
+            }
+            yield f"data: {json.dumps(final_payload)}\n\n"
+
+        except Exception as e:
+            logger.error(f"[RAG STREAM STEP] STREAMING FAILED for Team '{active_team_name}': {e}")
+            yield f"data: {json.dumps({'token': f'\\n[Error: {str(e)}]', 'error': True})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'sources': [], 'team_name': active_team_name})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

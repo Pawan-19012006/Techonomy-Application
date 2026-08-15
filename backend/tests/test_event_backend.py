@@ -24,11 +24,11 @@ def setup_database():
     init_db()
     db = SessionLocal()
     try:
-        db.execute(sqlalchemy.text("DELETE FROM prompt_logs"))
-        db.execute(sqlalchemy.text("DELETE FROM team_quotas"))
-        db.execute(sqlalchemy.text("DELETE FROM teams"))
-        db.execute(sqlalchemy.text("DELETE FROM llm_lanes"))
-        db.execute(sqlalchemy.text("DELETE FROM events"))
+        db.query(PromptLogModel).delete()
+        db.query(TeamQuotaModel).delete()
+        db.query(TeamModel).delete()
+        db.query(LLMLaneModel).delete()
+        db.query(EventModel).delete()
         db.commit()
         from app.database.db import seed_initial_data
         seed_initial_data(db)
@@ -136,7 +136,7 @@ def test_5_and_6_chat_request_and_prompt_logging():
 
     # Give background task time to persist prompt log
     import time
-    time.sleep(0.1)
+    time.sleep(1.0)
 
     # Verify prompt is stored in prompt_logs history
     history_res = client.get(f"{settings.API_PREFIX}/teams/TEAM-01/prompts")
@@ -181,7 +181,7 @@ def test_8_prompt_history_filtered_by_team():
         client.post(f"{settings.API_PREFIX}/chat", json={"team_name": "BETA", "question": "Beta Q1"})
 
     import time
-    time.sleep(0.2)
+    time.sleep(1.5)
 
     prompts_alpha = client.get(f"{settings.API_PREFIX}/teams/ALPHA/prompts").json()
     prompts_beta = client.get(f"{settings.API_PREFIX}/teams/BETA/prompts").json()
