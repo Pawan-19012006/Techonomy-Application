@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # 1. Local PostgreSQL Database
   postgres:
     image: postgres:16-alpine
     container_name: techonomy_postgres
@@ -19,6 +20,7 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # 2. Local Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:v1.12.0
     container_name: techonomy_qdrant
@@ -28,9 +30,10 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
+  # 3. Techonomy FastAPI Backend
   backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: techonomy_backend
     ports:
@@ -42,19 +45,34 @@ services:
       DATABASE_URL: "${DATABASE_URL:-postgresql://techonomy:techonomy_pass@postgres:5432/techonomy_db}"
       QDRANT_HOST: "${QDRANT_HOST:-qdrant}"
       QDRANT_PORT: "${QDRANT_PORT:-6333}"
+      QDRANT_COLLECTION_NAME: "${QDRANT_COLLECTION_NAME:-company_knowledge}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
       JWT_SECRET: "${JWT_SECRET:-temporary-development-jwt-secret-key-change-in-production}"
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
     volumes:
       - hf_cache:/root/.cache/huggingface
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - ./backend/data:/app/data
+      - ./backend/logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
       qdrant:
         condition: service_started
+    restart: unless-stopped
+
+  # 4. Techonomy Vite Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://localhost:8000}"
+    container_name: techonomy_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
     restart: unless-stopped
 
 volumes:
