@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import settings
-from app.database.sqlite import reset_db
+from app.database.models import LLMLaneModel, TeamQuotaModel, TeamModel, EventModel, PromptLogModel
+from app.database.db import SessionLocal, init_db
 from app.knowledge.rag.chat_service import ChatService, ChatServiceResult
 from app.main import app
 from app.schemas.chat import SourceItem
@@ -14,10 +15,25 @@ from app.schemas.chat import SourceItem
 client = TestClient(app)
 
 
+import sqlalchemy
+
+
 @pytest.fixture(autouse=True)
 def setup_database():
-    """Resets database schema before each test run."""
-    reset_db()
+    """Cleans database tables before each test run."""
+    init_db()
+    db = SessionLocal()
+    try:
+        db.execute(sqlalchemy.text("DELETE FROM prompt_logs"))
+        db.execute(sqlalchemy.text("DELETE FROM team_quotas"))
+        db.execute(sqlalchemy.text("DELETE FROM teams"))
+        db.execute(sqlalchemy.text("DELETE FROM llm_lanes"))
+        db.execute(sqlalchemy.text("DELETE FROM events"))
+        db.commit()
+        from app.database.db import seed_initial_data
+        seed_initial_data(db)
+    finally:
+        db.close()
 
 
 def test_cors_preflight_and_headers():
@@ -118,6 +134,10 @@ def test_5_and_6_chat_request_and_prompt_logging():
         assert data["answer"] == "Operating revenue for FY24 was INR 4,520 Crores."
         assert len(data["sources"]) == 1
 
+    # Give background task time to persist prompt log
+    import time
+    time.sleep(0.1)
+
     # Verify prompt is stored in prompt_logs history
     history_res = client.get(f"{settings.API_PREFIX}/teams/TEAM-01/prompts")
     assert history_res.status_code == 200
@@ -159,6 +179,9 @@ def test_8_prompt_history_filtered_by_team():
         client.post(f"{settings.API_PREFIX}/chat", json={"team_name": "ALPHA", "question": "Alpha Q1"})
         client.post(f"{settings.API_PREFIX}/chat", json={"team_name": "ALPHA", "question": "Alpha Q2"})
         client.post(f"{settings.API_PREFIX}/chat", json={"team_name": "BETA", "question": "Beta Q1"})
+
+    import time
+    time.sleep(0.2)
 
     prompts_alpha = client.get(f"{settings.API_PREFIX}/teams/ALPHA/prompts").json()
     prompts_beta = client.get(f"{settings.API_PREFIX}/teams/BETA/prompts").json()

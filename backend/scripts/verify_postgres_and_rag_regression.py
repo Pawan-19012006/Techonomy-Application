@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient
 from app.config import settings
-from app.database.sqlite import SessionLocal
+from app.database.db import SessionLocal
 from app.knowledge.rag.answer_cache import answer_cache
 from app.knowledge.rag.chat_service import ChatService
 from app.knowledge.retrieval.query_embedding_cache import query_embedding_cache

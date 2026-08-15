@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.database.models import LLMLaneModel
-from app.database.sqlite import SessionLocal, init_db
+from app.database.db import SessionLocal, init_db
 from app.knowledge.exceptions import LLMQuotaExhaustedError
 from app.knowledge.rag.lane import LLMLane, LanePriority, LaneState
 from app.knowledge.rag.llm_gateway import LLMGateway

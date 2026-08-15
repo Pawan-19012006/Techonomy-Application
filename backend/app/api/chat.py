@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.database.sqlite import SessionLocal, get_db
+from app.database.db import SessionLocal, get_db
 from app.knowledge.rag.chat_service import ChatService
 from app.knowledge.rag.llm_gateway import LLMGateway
 from app.schemas.chat import ChatQueryRequest, ChatResponse

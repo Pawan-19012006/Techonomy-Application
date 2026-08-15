@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database.sqlite import Base
+from app.database.db import Base
 
 
 def utc_now() -> datetime:

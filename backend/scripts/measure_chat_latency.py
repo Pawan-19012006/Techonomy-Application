@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient
 from app.config import settings
-from app.database.sqlite import init_db
+from app.database.db import init_db
 from app.main import app
 
 init_db()

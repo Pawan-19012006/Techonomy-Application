@@ -9,7 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.config import settings
-from app.database.sqlite import SessionLocal, init_db
+from app.database.db import SessionLocal, init_db
 from app.knowledge.rag.chat_service import ChatService
 from app.knowledge.rag.prompt_builder import PromptBuilder
 from app.knowledge.retrieval.retrieval_pipeline import RetrievalPipeline

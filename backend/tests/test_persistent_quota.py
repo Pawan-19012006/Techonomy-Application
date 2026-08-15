@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database.models import Base, LLMLaneModel, TeamQuotaModel, TeamModel, EventModel, utc_now
-from app.database.sqlite import SessionLocal, init_db
+from app.database.db import SessionLocal, init_db
 from app.knowledge.exceptions import LLMQuotaExhaustedError
 from app.knowledge.rag.lane import LaneState
 from app.knowledge.rag.scheduler import QuotaScheduler

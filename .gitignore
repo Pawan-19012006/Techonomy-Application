@@ -8,6 +8,10 @@
 *.pem
 *.key
 *.cert
+credentials.json
+service-account*.json
+secrets.json
+*_secret.*
 
 # ==========================================
 # Node.js & Frontend Build Outputs
@@ -18,11 +22,12 @@ frontend/dist/
 frontend/dist-ssr/
 frontend/.env
 frontend/.env.local
+frontend/.env.*.local
 .eslintcache
 .npm/
 
 # ==========================================
-# Python & Caching
+# Python & Caching Artifacts
 # ==========================================
 __pycache__/
 *.py[cod]
@@ -49,9 +54,6 @@ backend/.venv/
 backend/venv/
 backend/env/
 
-# Local configuration / secrets
-/backend/app/config.py
-
 # ==========================================
 # Databases & Vector DB Local Storage
 # ==========================================
@@ -62,37 +64,57 @@ backend/env/
 *.sqlite
 *.sqlite3
 techonomy.db
-backend/techonomy.db
+test_fallback.db
+backend/*.db
+backend/*.sqlite
 qdrant_storage/
 backend/qdrant_storage/
 storage/
+backend/storage/
 
 # ==========================================
-# Runtime Logs & Upload Data
+# Model & Tokenizer Local Caches
+# ==========================================
+.cache/
+.huggingface/
+transformers_cache/
+sentence_transformers/
+model_cache/
+backend/model_cache/
+
+# ==========================================
+# Runtime Logs, Uploads & Exports
 # ==========================================
 logs/
 *.log
 backend/logs/
 backend/data/uploads/
 backend/data/exports/
+backend/tmp/
 
 # ==========================================
-# IDEs & Editors
+# Temporary Files & Editor Artifacts
 # ==========================================
-.vscode/
-.idea/
 *.swp
 *.swo
 *.tmp
+*.temp
 *.bak
-
-# ==========================================
-# Operating System Files
-# ==========================================
+*~
 .DS_Store
 Thumbs.db
 .Spotlight-V100
 .Trashes
+
+# ==========================================
+# IDEs & Developer Tooling
+# ==========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
 
 # ==========================================
 # Agent & Assistant Metadata

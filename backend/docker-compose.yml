@@ -12,7 +12,7 @@ services:
       - PROJECT_NAME=Techonomy
       - HOST=0.0.0.0
       - PORT=8000
-      - DATABASE_URL=sqlite:///./techonomy.db
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=temporary-development-jwt-secret-key-change-in-production
     volumes:
       - ./data:/app/data

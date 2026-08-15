@@ -69,6 +69,7 @@ def seed_initial_data(db: Session) -> None:
 
 def init_db() -> None:
     """Initializes database tables according to SQLAlchemy Declarative models and seeds default data."""
+    import app.database.models  # Ensure models are registered on Base.metadata
     logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
@@ -79,12 +80,14 @@ def init_db() -> None:
     except Exception as e:
         logger.error(f"Error seeding database: {e}")
         db.rollback()
+        raise
     finally:
         db.close()
 
 
 def reset_db() -> None:
     """Drops and recreates all database tables (For test setups and schema resets)."""
+    import app.database.models  # Ensure models are registered on Base.metadata
     logger.info("Resetting database schema...")
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)

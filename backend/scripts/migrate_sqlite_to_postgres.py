@@ -19,7 +19,7 @@ from app.database.models import (
     PromptLogModel,
     TeamModel,
 )
-from app.database.sqlite import Base, SessionLocal, engine
+from app.database.db import Base, SessionLocal, engine
 from app.utils.logging import logger
 
 

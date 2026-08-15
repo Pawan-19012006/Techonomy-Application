@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.models import LLMLaneModel, utc_now
-from app.database.sqlite import SessionLocal
+from app.database.db import SessionLocal
 from app.knowledge.exceptions import LLMQuotaExhaustedError
 from app.knowledge.rag.lane import LLMLane, LanePriority, LaneState
 from app.utils.logging import logger

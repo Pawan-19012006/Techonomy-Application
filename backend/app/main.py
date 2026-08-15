@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api import chat, teams
 from app.config import settings
-from app.database.sqlite import get_db, init_db
+from app.database.db import get_db, init_db
 from app.knowledge.indexing.embedder import EmbeddingGenerator
 from app.knowledge.rag.answer_cache import answer_cache
 from app.knowledge.rag.llm_gateway import close_shared_clients

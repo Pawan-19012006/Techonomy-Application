@@ -29,9 +29,13 @@ env/
 .env.*
 !.env.example
 *.env
-
-# Local configuration / secrets
-/backend/app/config.py
+*.pem
+*.key
+*.cert
+credentials.json
+service-account*.json
+secrets.json
+*_secret.*
 
 # ==========================================
 # Databases & Vector DB Storage
@@ -43,23 +47,42 @@ env/
 *.sqlite
 *.sqlite3
 techonomy.db
+test_fallback.db
 qdrant_storage/
 storage/
 
 # ==========================================
-# Runtime Uploads, Exports, and Logs
+# Model & Tokenizer Local Caches
+# ==========================================
+.cache/
+.huggingface/
+transformers_cache/
+sentence_transformers/
+model_cache/
+
+# ==========================================
+# Runtime Uploads, Exports, Logs, and Temp
 # ==========================================
 logs/
 *.log
 data/uploads/
 data/exports/
+tmp/
 
 # ==========================================
 # IDEs & Operating System
 # ==========================================
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 .idea/
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
+*.tmp
+*.temp
+*.bak
+*~

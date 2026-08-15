@@ -19,6 +19,24 @@ from app.knowledge.rag.prompt_builder import PromptBuilder
 from app.schemas.chat import ChatResponse, SourceItem
 
 
+from app.database.models import LLMLaneModel, TeamQuotaModel
+from app.database.db import SessionLocal, init_db
+
+
+@pytest.fixture(autouse=True)
+def clean_db():
+    """Ensures database tables are fresh before each test in test_rag_pipeline.py."""
+    init_db()
+    db = SessionLocal()
+    try:
+        db.query(LLMLaneModel).delete()
+        db.query(TeamQuotaModel).delete()
+        db.commit()
+    finally:
+        db.close()
+    yield
+
+
 @pytest.fixture
 def sample_search_results():
     """Fixture returning sample SearchResult objects for testing."""
@@ -148,7 +166,7 @@ def test_chat_api_endpoint():
     """Tests POST /api/chat endpoint execution for an event team."""
     from fastapi.testclient import TestClient
     from app.main import app
-    from app.database.sqlite import reset_db
+    from app.database.db import reset_db
 
     reset_db()
     client = TestClient(app)

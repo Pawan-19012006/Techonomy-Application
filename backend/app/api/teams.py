@@ -4,7 +4,7 @@ from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database.sqlite import get_db
+from app.database.db import get_db
 from app.schemas.team import PromptLogResponse, TeamJoinRequest, TeamResponse
 from app.services.team_service import TeamService
 
