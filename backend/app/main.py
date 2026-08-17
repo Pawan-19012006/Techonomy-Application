@@ -1,10 +1,13 @@
 """Main FastAPI Application Entrypoint with lifespan pre-warming, health probes, and CORS."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 import time
 from typing import Any, Dict, Generator
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -26,7 +29,7 @@ async def lifespan(app: FastAPI) -> Generator[None, None, None]:
     t0 = time.perf_counter()
     logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}...")
 
-    # Initialize SQLite database tables
+    # Initialize database tables
     init_db()
 
     # Preload and warm up SentenceTransformer embedding model in memory
@@ -71,9 +74,9 @@ app.include_router(teams.router, prefix=settings.API_PREFIX)
 app.include_router(chat.router, prefix=settings.API_PREFIX)
 
 
-@app.get("/", tags=["Health"], summary="Root Status Endpoint")
-async def root() -> Dict[str, str]:
-    """Root status endpoint."""
+@app.get("/api/status", tags=["Health"], summary="API Status Endpoint")
+async def api_status() -> Dict[str, str]:
+    """API status endpoint."""
     return {
         "name": settings.PROJECT_NAME,
         "version": settings.VERSION,
@@ -120,3 +123,55 @@ async def health_check(db: Session = Depends(get_db)) -> Dict[str, Any]:
         "configuration": "loaded",
         "version": settings.VERSION,
     }
+
+
+# Locate Frontend Production Build / Static Directory
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
+ALT_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+DIST_DIR = (
+    FRONTEND_DIST_DIR
+    if FRONTEND_DIST_DIR.is_dir()
+    else (ALT_STATIC_DIR if ALT_STATIC_DIR.is_dir() else None)
+)
+
+if DIST_DIR and (DIST_DIR / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa_or_static(full_path: str):
+    """Serves production frontend static assets and handles SPA fallback for client-side routing."""
+    clean_path = full_path.lstrip("/")
+    if (
+        clean_path == "api"
+        or clean_path.startswith("api/")
+        or clean_path == "health"
+        or clean_path.startswith("health/")
+        or clean_path == "docs"
+        or clean_path.startswith("docs/")
+        or clean_path == "openapi.json"
+        or clean_path == "redoc"
+    ):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+
+    if DIST_DIR:
+        if clean_path:
+            file_path = DIST_DIR / clean_path
+            if file_path.is_file():
+                return FileResponse(str(file_path))
+
+        index_path = DIST_DIR / "index.html"
+        if index_path.is_file():
+            return FileResponse(str(index_path))
+
+    if not clean_path:
+        return {
+            "name": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "status": "online",
+        }
+
+    raise HTTPException(status_code=404, detail="Resource not found")
+
