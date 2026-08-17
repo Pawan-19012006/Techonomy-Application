@@ -22,6 +22,8 @@ class QuotaScheduler:
         self,
         gemini_api_key: str = settings.GEMINI_API_KEY,
         nemotron_api_key: str = settings.OPENROUTER_API_KEY,
+        gemini_api_keys: Optional[List[str]] = None,
+        openrouter_api_keys: Optional[List[str]] = None,
         gemini_enabled: bool = settings.GEMINI_ENABLED,
         nemotron_enabled: bool = settings.NEMOTRON_ENABLED,
         gemini_model: str = settings.GEMINI_MODEL,
@@ -44,6 +46,22 @@ class QuotaScheduler:
             "OPENROUTER_API_KEY": nemotron_api_key,
         }
 
+        # Populate individual key references GEMINI_API_KEY_1..10 and OPENROUTER_API_KEY_1..10
+        for idx in range(1, 11):
+            g_key_specific = getattr(settings, f"GEMINI_API_KEY_{idx}", "").strip()
+            g_val = (
+                gemini_api_keys[idx - 1] if gemini_api_keys is not None and idx <= len(gemini_api_keys) and gemini_api_keys[idx - 1]
+                else (g_key_specific if g_key_specific else gemini_api_key)
+            )
+            self._credentials[f"GEMINI_API_KEY_{idx}"] = g_val
+
+            o_key_specific = getattr(settings, f"OPENROUTER_API_KEY_{idx}", "").strip()
+            o_val = (
+                openrouter_api_keys[idx - 1] if openrouter_api_keys is not None and idx <= len(openrouter_api_keys) and openrouter_api_keys[idx - 1]
+                else (o_key_specific if o_key_specific else nemotron_api_key)
+            )
+            self._credentials[f"OPENROUTER_API_KEY_{idx}"] = o_val
+
         # Global scheduler operational statistics
         self.total_requests: int = 0
         self.gemini_requests: int = 0
@@ -55,12 +73,14 @@ class QuotaScheduler:
         self.gemini_pool: Dict[str, LLMLane] = {}
         for i in range(1, gemini_num_lanes + 1):
             lane_id = f"G{i:02d}"
+            cred_ref = f"GEMINI_API_KEY_{i}" if f"GEMINI_API_KEY_{i}" in self._credentials else "GEMINI_API_KEY"
+            key_val = self._credentials.get(cred_ref, "")
             self.gemini_pool[lane_id] = LLMLane(
                 lane_id=lane_id,
                 provider="gemini",
                 model=gemini_model,
-                credential_ref="GEMINI_API_KEY",
-                enabled=gemini_enabled and bool(gemini_api_key and gemini_api_key.strip()),
+                credential_ref=cred_ref,
+                enabled=gemini_enabled and bool(key_val and key_val.strip()),
                 priority=LanePriority.PRIMARY,
                 max_concurrent_requests=gemini_max_concurrency,
                 configured_test_request_limit=gemini_test_limit,
@@ -70,12 +90,14 @@ class QuotaScheduler:
         self.nemotron_pool: Dict[str, LLMLane] = {}
         for i in range(1, nemotron_num_lanes + 1):
             lane_id = f"N{i:02d}"
+            cred_ref = f"OPENROUTER_API_KEY_{i}" if f"OPENROUTER_API_KEY_{i}" in self._credentials else "OPENROUTER_API_KEY"
+            key_val = self._credentials.get(cred_ref, "")
             self.nemotron_pool[lane_id] = LLMLane(
                 lane_id=lane_id,
                 provider="nemotron",
                 model=nemotron_model,
-                credential_ref="OPENROUTER_API_KEY",
-                enabled=nemotron_enabled and bool(nemotron_api_key and nemotron_api_key.strip()),
+                credential_ref=cred_ref,
+                enabled=nemotron_enabled and bool(key_val and key_val.strip()),
                 priority=LanePriority.FALLBACK,
                 max_concurrent_requests=nemotron_max_concurrency,
                 configured_test_request_limit=nemotron_test_limit,
@@ -119,16 +141,31 @@ class QuotaScheduler:
                     has_changes = True
                 else:
                     rec = db_lanes[lane_id]
-                    if rec.enabled != lane.enabled or rec.model != lane.model:
+                    if rec.enabled != lane.enabled or rec.model != lane.model or rec.credential_ref != lane.credential_ref or rec.daily_limit != lane.configured_test_request_limit:
                         rec.enabled = lane.enabled
                         rec.model = lane.model
+                        rec.credential_ref = lane.credential_ref
+                        rec.daily_limit = lane.configured_test_request_limit
                         has_changes = True
+                    now_ts = t if 't' in locals() else time.time()
                     lane.requests_used = rec.requests_used
                     lane.active_requests = rec.active_requests
                     lane.error_count = rec.error_count
-                    lane.state = LaneState(rec.state) if rec.state in LaneState.__members__ else LaneState.AVAILABLE
+
                     if rec.cooldown_until:
-                        lane.cooldown_until = rec.cooldown_until.timestamp()
+                        cd_ts = rec.cooldown_until.timestamp()
+                        if now_ts < cd_ts:
+                            lane.state = LaneState(rec.state) if rec.state in LaneState.__members__ else LaneState.AVAILABLE
+                            lane.cooldown_until = cd_ts
+                        else:
+                            lane.cooldown_until = None
+                            lane.state = LaneState.AVAILABLE if rec.requests_used < rec.daily_limit else LaneState.DAILY_EXHAUSTED
+                    else:
+                        lane.cooldown_until = None
+                        if rec.state in (LaneState.RATE_LIMITED.value, LaneState.DEGRADED.value) and rec.requests_used < rec.daily_limit:
+                            lane.state = LaneState.AVAILABLE
+                        else:
+                            lane.state = LaneState(rec.state) if rec.state in LaneState.__members__ else LaneState.AVAILABLE
 
             # Synchronize Nemotron pool
             for lane_id, lane in self.nemotron_pool.items():
@@ -154,15 +191,42 @@ class QuotaScheduler:
                     has_changes = True
                 else:
                     rec = db_lanes[lane_id]
-                    if rec.enabled != lane.enabled or rec.model != lane.model:
+                    if rec.enabled != lane.enabled or rec.model != lane.model or rec.credential_ref != lane.credential_ref or rec.daily_limit != lane.configured_test_request_limit:
                         rec.enabled = lane.enabled
                         rec.model = lane.model
+                        rec.credential_ref = lane.credential_ref
+                        rec.daily_limit = lane.configured_test_request_limit
                         has_changes = True
+                    now_ts = t if 't' in locals() else time.time()
                     lane.requests_used = rec.requests_used
                     lane.active_requests = rec.active_requests
                     lane.error_count = rec.error_count
-                    lane.state = LaneState(rec.state) if rec.state in LaneState.__members__ else LaneState.AVAILABLE
-                    lane.cooldown_until = rec.cooldown_until.timestamp() if rec.cooldown_until else None
+
+                    if rec.cooldown_until:
+                        cd_ts = rec.cooldown_until.timestamp()
+                        if now_ts < cd_ts:
+                            lane.state = LaneState(rec.state) if rec.state in LaneState.__members__ else LaneState.AVAILABLE
+                            lane.cooldown_until = cd_ts
+                        else:
+                            lane.cooldown_until = None
+                            lane.state = LaneState.AVAILABLE if rec.requests_used < rec.daily_limit else LaneState.DAILY_EXHAUSTED
+                    else:
+                        lane.cooldown_until = None
+                        if rec.state in (LaneState.RATE_LIMITED.value, LaneState.DEGRADED.value) and rec.requests_used < rec.daily_limit:
+                            lane.state = LaneState.AVAILABLE
+                        else:
+                            lane.state = LaneState(rec.state) if rec.state in LaneState.__members__ else LaneState.AVAILABLE
+
+            # Reconcile DB lanes omitted from current pool instances
+            for lid, rec in db_lanes.items():
+                if rec.provider == "gemini" and lid not in self.gemini_pool:
+                    if rec.enabled:
+                        rec.enabled = False
+                        has_changes = True
+                elif rec.provider == "nemotron" and lid not in self.nemotron_pool:
+                    if rec.enabled:
+                        rec.enabled = False
+                        has_changes = True
 
             if has_changes:
                 try:

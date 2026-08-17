@@ -103,6 +103,28 @@ class Settings(BaseSettings):
 
     # Quota-Aware LLM Gateway & Scheduler Configuration
     GEMINI_API_KEY: str = ""
+    GEMINI_API_KEY_1: str = ""
+    GEMINI_API_KEY_2: str = ""
+    GEMINI_API_KEY_3: str = ""
+    GEMINI_API_KEY_4: str = ""
+    GEMINI_API_KEY_5: str = ""
+    GEMINI_API_KEY_6: str = ""
+    GEMINI_API_KEY_7: str = ""
+    GEMINI_API_KEY_8: str = ""
+    GEMINI_API_KEY_9: str = ""
+    GEMINI_API_KEY_10: str = ""
+
+    OPENROUTER_API_KEY_1: str = ""
+    OPENROUTER_API_KEY_2: str = ""
+    OPENROUTER_API_KEY_3: str = ""
+    OPENROUTER_API_KEY_4: str = ""
+    OPENROUTER_API_KEY_5: str = ""
+    OPENROUTER_API_KEY_6: str = ""
+    OPENROUTER_API_KEY_7: str = ""
+    OPENROUTER_API_KEY_8: str = ""
+    OPENROUTER_API_KEY_9: str = ""
+    OPENROUTER_API_KEY_10: str = ""
+
     GEMINI_MODEL: str = "gemini-flash-lite-latest"
     GEMINI_ENABLED: bool = True
     GEMINI_TEST_REQUEST_LIMIT: int = 3
@@ -115,6 +137,28 @@ class Settings(BaseSettings):
     NEMOTRON_NUM_LANES: int = 10
 
     SCHEDULER_COOLDOWN_SECONDS: float = 60.0
+
+    @property
+    def gemini_api_keys_list(self) -> List[str]:
+        """Returns ordered list of 10 Gemini API keys with fallback to single GEMINI_API_KEY if specific keys are unconfigured."""
+        keys = []
+        for i in range(1, 11):
+            key = getattr(self, f"GEMINI_API_KEY_{i}", "").strip()
+            if not key:
+                key = self.GEMINI_API_KEY.strip()
+            keys.append(key)
+        return keys
+
+    @property
+    def openrouter_api_keys_list(self) -> List[str]:
+        """Returns ordered list of 10 OpenRouter API keys with fallback to single OPENROUTER_API_KEY if specific keys are unconfigured."""
+        keys = []
+        for i in range(1, 11):
+            key = getattr(self, f"OPENROUTER_API_KEY_{i}", "").strip()
+            if not key:
+                key = self.OPENROUTER_API_KEY.strip()
+            keys.append(key)
+        return keys
 
     model_config = SettingsConfigDict(
         env_file=".env",

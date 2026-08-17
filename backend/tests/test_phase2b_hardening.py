@@ -528,7 +528,7 @@ def test_2b_k1_credential_privacy_audit(caplog):
         for rec in lanes:
             assert raw_gemini_key not in rec.credential_ref
             assert raw_nemotron_key not in rec.credential_ref
-            assert rec.credential_ref in ["GEMINI_API_KEY", "OPENROUTER_API_KEY"]
+            assert rec.credential_ref.startswith("GEMINI_API_KEY") or rec.credential_ref.startswith("OPENROUTER_API_KEY")
 
         status = scheduler.get_status()
         status_str = str(status)

@@ -159,9 +159,10 @@ def test_8_concurrent_lane_reservations_cannot_exceed_max_concurrency():
     l1, _, _ = scheduler.select_lane_sync()
     assert l1.lane_id == "G01"
 
-    # Second reservation takes G02 because G01 is BUSY (active_requests=1)
+    # Second reservation takes another available Gemini lane because G01 is BUSY (active_requests=1)
     l2, _, _ = scheduler.select_lane_sync()
-    assert l2.lane_id == "G02"
+    assert l2.lane_id != "G01"
+    assert l2.lane_id.startswith("G")
 
     db = SessionLocal()
     try:
@@ -412,7 +413,7 @@ def test_23_credentials_never_appear_in_db_logs_status():
             # Check DB records
             assert "secret-gemini-key-12345" not in lane_rec.credential_ref
             assert "secret-nemotron-key-67890" not in lane_rec.credential_ref
-            assert lane_rec.credential_ref in ["GEMINI_API_KEY", "OPENROUTER_API_KEY"]
+            assert lane_rec.credential_ref.startswith("GEMINI_API_KEY") or lane_rec.credential_ref.startswith("OPENROUTER_API_KEY")
 
         # Check telemetry status dictionary
         status = scheduler.get_status()
