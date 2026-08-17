@@ -1,7 +1,52 @@
 version: '3.8'
 
 services:
-  # 1. Local PostgreSQL Database
+  # ===================================================================
+  # 1. Techonomy Production FastAPI Backend (Serves React Frontend)
+  # ===================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: techonomy_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      PROJECT_NAME: "${PROJECT_NAME:-Techonomy Knowledge Intelligence Platform}"
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://techonomy:techonomy_pass@postgres:5432/techonomy_db}"
+      QDRANT_URL: "${QDRANT_URL:-}"
+      QDRANT_API_KEY: "${QDRANT_API_KEY:-}"
+      QDRANT_HOST: "${QDRANT_HOST:-qdrant}"
+      QDRANT_PORT: "${QDRANT_PORT:-6333}"
+      QDRANT_COLLECTION_NAME: "${QDRANT_COLLECTION_NAME:-company_knowledge}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      JWT_SECRET: "${JWT_SECRET:-temporary-development-jwt-secret-key-change-in-production}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+      - ./backend/data:/app/data
+      - ./backend/logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  # ===================================================================
+  # 2. Local PostgreSQL Database Fallback (Alpine)
+  # ===================================================================
   postgres:
     image: postgres:16-alpine
     container_name: techonomy_postgres
@@ -20,7 +65,9 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # 2. Local Qdrant Vector Database
+  # ===================================================================
+  # 3. Local Qdrant Vector Database Fallback
+  # ===================================================================
   qdrant:
     image: qdrant/qdrant:v1.12.0
     container_name: techonomy_qdrant
@@ -28,51 +75,6 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-
-  # 3. Techonomy FastAPI Backend
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: techonomy_backend
-    ports:
-      - "8000:8000"
-    environment:
-      PROJECT_NAME: "Techonomy Knowledge Intelligence Platform"
-      HOST: "0.0.0.0"
-      PORT: "8000"
-      DATABASE_URL: "${DATABASE_URL:-postgresql://techonomy:techonomy_pass@postgres:5432/techonomy_db}"
-      QDRANT_HOST: "${QDRANT_HOST:-qdrant}"
-      QDRANT_PORT: "${QDRANT_PORT:-6333}"
-      QDRANT_COLLECTION_NAME: "${QDRANT_COLLECTION_NAME:-company_knowledge}"
-      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
-      JWT_SECRET: "${JWT_SECRET:-temporary-development-jwt-secret-key-change-in-production}"
-      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
-    volumes:
-      - hf_cache:/root/.cache/huggingface
-      - ./backend/data:/app/data
-      - ./backend/logs:/app/logs
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-    restart: unless-stopped
-
-  # 4. Techonomy Vite Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://localhost:8000}"
-    container_name: techonomy_frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
     restart: unless-stopped
 
 volumes:

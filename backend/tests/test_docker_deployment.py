@@ -29,7 +29,6 @@ def test_docker_compose_structure_and_services():
     assert "postgres" in services, "docker-compose.yml must define postgres service"
     assert "qdrant" in services, "docker-compose.yml must define qdrant service"
     assert "backend" in services, "docker-compose.yml must define backend service"
-    assert "frontend" in services, "docker-compose.yml must define frontend service"
 
     # Verify volumes
     volumes = compose_data.get("volumes", {})
