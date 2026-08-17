@@ -162,8 +162,7 @@ class QuotaScheduler:
                     lane.active_requests = rec.active_requests
                     lane.error_count = rec.error_count
                     lane.state = LaneState(rec.state) if rec.state in LaneState.__members__ else LaneState.AVAILABLE
-                    if rec.cooldown_until:
-                        lane.cooldown_until = rec.cooldown_until.timestamp()
+                    lane.cooldown_until = rec.cooldown_until.timestamp() if rec.cooldown_until else None
 
             if has_changes:
                 try:
@@ -253,6 +252,12 @@ class QuotaScheduler:
 
             for lane in gemini_candidates:
                 if self._try_reserve_lane_db(lane, t, db):
+                    lane.requests_used += 1
+                    lane.active_requests += 1
+                    if lane.requests_used >= lane.configured_test_request_limit:
+                        lane.state = LaneState.DAILY_EXHAUSTED
+                    elif lane.active_requests >= lane.max_concurrent_requests:
+                        lane.state = LaneState.BUSY
                     self.total_requests += 1
                     self.gemini_requests += 1
                     api_key = self.get_api_key_for_lane(lane)
@@ -264,6 +269,12 @@ class QuotaScheduler:
 
             for lane in nemotron_candidates:
                 if self._try_reserve_lane_db(lane, t, db):
+                    lane.requests_used += 1
+                    lane.active_requests += 1
+                    if lane.requests_used >= lane.configured_test_request_limit:
+                        lane.state = LaneState.DAILY_EXHAUSTED
+                    elif lane.active_requests >= lane.max_concurrent_requests:
+                        lane.state = LaneState.BUSY
                     self.total_requests += 1
                     self.nemotron_fallback_requests += 1
                     api_key = self.get_api_key_for_lane(lane)
@@ -291,6 +302,10 @@ class QuotaScheduler:
         """Releases an active slot on the specified lane and updates persistent database state and operational metrics."""
         now_ts = now if now is not None else time.time()
         now_dt = datetime.fromtimestamp(now_ts, timezone.utc)
+
+        lane_obj = self.gemini_pool.get(lane_id) or self.nemotron_pool.get(lane_id)
+        if lane_obj:
+            lane_obj.active_requests = max(0, lane_obj.active_requests - 1)
 
         db = SessionLocal()
         try:

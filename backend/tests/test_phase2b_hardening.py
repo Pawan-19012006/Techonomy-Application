@@ -339,7 +339,7 @@ def test_2b_g1_streaming_lifecycle_holds_slot():
         gateway = LLMGateway(scheduler=scheduler)
 
         async def mock_stream_chunks():
-            yield "data: {\"choices\": [{\"delta\": {\"content\": \"Token1\"}}]}\n\n"
+            yield 'data: {"candidates": [{"content": {"parts": [{"text": "Token1"}]}}]}\n\n'
             # Verify DB active_requests is 1 while streaming
             db = SessionLocal()
             try:
@@ -347,8 +347,7 @@ def test_2b_g1_streaming_lifecycle_holds_slot():
                 assert rec.active_requests == 1
             finally:
                 db.close()
-            yield "data: {\"choices\": [{\"delta\": {\"content\": \"Token2\"}}]}\n\n"
-            yield "data: [DONE]\n\n"
+            yield 'data: {"candidates": [{"content": {"parts": [{"text": "Token2"}]}}]}\n\n'
 
         mock_client = MagicMock()
         mock_cm = MagicMock()
@@ -359,7 +358,8 @@ def test_2b_g1_streaming_lifecycle_holds_slot():
         mock_cm.__aexit__ = AsyncMock(return_value=None)
         mock_client.stream.return_value = mock_cm
 
-        with patch("app.knowledge.rag.llm_gateway.get_shared_async_client", return_value=mock_client):
+        with patch("app.knowledge.rag.providers.get_shared_async_client", return_value=mock_client), \
+             patch("app.knowledge.rag.llm_gateway.get_shared_async_client", return_value=mock_client):
             chunks = []
             async for token in gateway.generate_stream_async("Stream query"):
                 chunks.append(token)
@@ -451,7 +451,7 @@ def test_2b_h1b_restart_does_not_reset_active_requests():
 
 
 # =====================================================================
-# GROUP I: DATABASE TRANSACTION AUDIT & SAFETY
+# GROUP I: TRANSACTION ISOLATION
 # =====================================================================
 
 def test_2b_i1_db_transaction_isolation():
@@ -473,6 +473,9 @@ def test_2b_i1_db_transaction_isolation():
 
         async def generate_async(self, prompt, model, api_key, **kwargs):
             return "Adapter Success"
+
+        async def generate_stream_async(self, prompt, model, api_key, **kwargs):
+            yield "Adapter Success", None
 
     gateway = LLMGateway(scheduler=scheduler, gemini_adapter=MockAdapter())
     res = gateway.generate("Test prompt")

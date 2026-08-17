@@ -216,9 +216,8 @@ async def test_14_streaming_keeps_lane_occupied_until_completion(test_scheduler)
     lane = test_scheduler.gemini_pool["G01"]
 
     async def mock_stream_chunks():
-        yield "data: {\"choices\": [{\"delta\": {\"content\": \"Hello\"}}]}\n\n"
+        yield 'data: {"candidates": [{"content": {"parts": [{"text": "Hello"}]}}]}\n\n'
         assert lane.active_requests == 1
-        yield "data: [DONE]\n\n"
 
     mock_client = MagicMock()
     mock_cm = MagicMock()
@@ -231,7 +230,8 @@ async def test_14_streaming_keeps_lane_occupied_until_completion(test_scheduler)
 
     gateway = LLMGateway(scheduler=test_scheduler)
 
-    with patch("app.knowledge.rag.llm_gateway.get_shared_async_client", return_value=mock_client):
+    with patch("app.knowledge.rag.providers.get_shared_async_client", return_value=mock_client), \
+         patch("app.knowledge.rag.llm_gateway.get_shared_async_client", return_value=mock_client):
         chunks = []
         async for chunk in gateway.generate_stream_async("Stream query"):
             chunks.append(chunk)

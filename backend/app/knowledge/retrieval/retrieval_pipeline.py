@@ -1,7 +1,7 @@
 """Retrieval Pipeline coordinator orchestrating Phase 5 Knowledge Retrieval Engine with deterministic Query Decomposition."""
 
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from app.config import settings
 from app.knowledge.exceptions import RetrievalPipelineError
 from app.knowledge.models.retrieval_result import RetrievalResult
@@ -13,6 +13,11 @@ from app.knowledge.retrieval.reranker import Reranker
 from app.knowledge.retrieval.search_filters import SearchFilters
 from app.knowledge.retrieval.vector_search import VectorSearch
 from app.utils.logging import logger
+from app.utils.observability import (
+    get_request_id,
+    log_structured_event,
+    sanitize_error_message,
+)
 
 
 class RetrievalPipeline:
@@ -42,10 +47,13 @@ class RetrievalPipeline:
         top_k: int = settings.RETRIEVAL_TOP_K,
         top_n: int = settings.RETRIEVAL_RERANK_TOP_N,
         token_budget: int = settings.RETRIEVAL_CONTEXT_TOKEN_BUDGET,
+        request_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
     ) -> RetrievalResult:
         """Executes full Knowledge Retrieval Engine pipeline supporting multi-query decomposition with high-resolution timing."""
         pipeline_start = time.perf_counter()
-        logger.info(f"=== Starting Knowledge Retrieval Engine for query: '{query[:60]}...' ===")
+        req_id = get_request_id(request_id)
+        logger.info(f"=== Starting Knowledge Retrieval Engine (req_id={req_id}) for query: '{query[:60]}...' ===")
 
         try:
             # Stage 1: Query Processor & Query Decomposition
@@ -100,6 +108,32 @@ class RetrievalPipeline:
                         seen_keys.add(unique_key)
                         merged_raw_matches.append(match)
 
+            embed_ms = t_embed_total * 1000.0
+            qdrant_ms = t_search_total * 1000.0
+            chunk_cnt = len(merged_raw_matches)
+
+            log_structured_event("EMBEDDING_COMPLETE", req_id, duration_ms=embed_ms)
+            log_structured_event(
+                "QDRANT_RETRIEVAL_COMPLETE",
+                req_id,
+                duration_ms=qdrant_ms,
+                chunks=chunk_cnt,
+                succeeded=True,
+                zero_results=(chunk_cnt == 0),
+            )
+
+            if tracker and hasattr(tracker, "record_embedding"):
+                try:
+                    tracker.record_embedding(embed_ms)
+                    tracker.record_qdrant(
+                        duration_ms=qdrant_ms,
+                        chunk_count=chunk_cnt,
+                        succeeded=True,
+                        zero_results=(chunk_cnt == 0),
+                    )
+                except Exception as t_err:
+                    logger.warning(f"Tracker record failed in retrieve: {t_err}")
+
             # Stage 4: Reranker on Merged Candidates
             t3 = time.perf_counter()
             reranked_matches = self.reranker.rerank(
@@ -141,15 +175,23 @@ class RetrievalPipeline:
             )
 
             logger.info(
-                f"=== Completed Knowledge Retrieval Engine === "
+                f"=== Completed Knowledge Retrieval Engine (req_id={req_id}) === "
                 f"[QP: {t_qp:.3f}s, Embed: {t_embed_total:.3f}s, Search: {t_search_total:.3f}s, "
                 f"Rerank: {t_rerank:.3f}s, Context: {t_context:.3f}s, Total: {total_elapsed:.3f}s]"
             )
             return result
 
         except Exception as e:
-            logger.error(f"Retrieval Pipeline execution failed for query '{query}': {e}")
-            raise RetrievalPipelineError(f"Retrieval pipeline failed: {str(e)}") from e
+            elapsed_ms = (time.perf_counter() - pipeline_start) * 1000.0
+            log_structured_event(
+                "STAGE_FAILURE",
+                req_id,
+                stage="retrieval",
+                duration_ms=elapsed_ms,
+                error_type=type(e).__name__,
+            )
+            logger.error(f"Retrieval Pipeline execution failed for query (req_id={req_id}): {sanitize_error_message(e)}")
+            raise RetrievalPipelineError(f"Retrieval pipeline failed: {sanitize_error_message(e)}") from e
 
 
 def retrieve_context(

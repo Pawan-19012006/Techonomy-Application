@@ -22,6 +22,8 @@ class QdrantClientWrapper:
         host: str = settings.QDRANT_HOST,
         port: int = settings.QDRANT_PORT,
         storage_path: Optional[str] = settings.QDRANT_STORAGE_PATH,
+        url: Optional[str] = settings.QDRANT_URL,
+        api_key: Optional[str] = settings.QDRANT_API_KEY,
     ):
         """Initializes Qdrant Client configuration.
 
@@ -29,14 +31,24 @@ class QdrantClientWrapper:
             host (str): Qdrant server host.
             port (int): Qdrant server port.
             storage_path (Optional[str]): Local disk storage path fallback.
+            url (Optional[str]): Qdrant Cloud cluster URL.
+            api_key (Optional[str]): Qdrant Cloud API key.
         """
         self.host = host
         self.port = port
         self.storage_path = storage_path
+        self.url = url
+        self.api_key = api_key
         self._client: Optional[QdrantClient] = None
 
+    @classmethod
+    def reset_shared_instance(cls) -> None:
+        """Clears the shared client singleton instance (useful for testing configuration changes)."""
+        cls._shared_client_instance = None
+
     def connect(self) -> QdrantClient:
-        """Establishes connection to Qdrant server, falling back to local storage if server unavailable.
+        """Establishes connection to Qdrant server (Cloud if QDRANT_URL is set, else local host/port),
+        falling back to local storage if remote server is unavailable.
 
         Returns:
             QdrantClient: Active Qdrant client instance.
@@ -51,39 +63,66 @@ class QdrantClientWrapper:
             self._client = QdrantClientWrapper._shared_client_instance
             return self._client
 
-        logger.info(f"Connecting to Qdrant at '{self.host}:{self.port}'...")
+        target_url = (self.url if self.url is not None else settings.QDRANT_URL or "").strip()
+        api_key_val = (self.api_key if self.api_key is not None else settings.QDRANT_API_KEY or "").strip()
 
+        # Try Qdrant Cloud if QDRANT_URL is configured
+        if target_url:
+            logger.info(f"Connecting to Qdrant Cloud at '{target_url}'...")
+            try:
+                client = QdrantClient(
+                    url=target_url,
+                    api_key=api_key_val if api_key_val else None,
+                    timeout=settings.QDRANT_TIMEOUT_SECONDS,
+                )
+                client.get_collections()
+                self._client = client
+                QdrantClientWrapper._shared_client_instance = client
+                logger.info(f"Successfully connected to Qdrant Cloud at '{target_url}'.")
+                return self._client
+            except Exception as e:
+                err_msg = str(e)
+                if api_key_val and api_key_val in err_msg:
+                    err_msg = err_msg.replace(api_key_val, "[REDACTED_API_KEY]")
+                logger.warning(
+                    f"Could not connect to Qdrant Cloud at '{target_url}' ({err_msg}). "
+                    f"Falling back to local disk storage at '{self.storage_path}'..."
+                )
+
+        # Try connecting to HTTP server host/port (Local Qdrant)
+        else:
+            logger.info(f"Connecting to Qdrant at '{self.host}:{self.port}'...")
+            try:
+                client = QdrantClient(host=self.host, port=self.port, timeout=2.0)
+                client.get_collections()
+                self._client = client
+                QdrantClientWrapper._shared_client_instance = client
+                logger.info(f"Successfully connected to Qdrant server at '{self.host}:{self.port}'.")
+                return self._client
+            except Exception as e:
+                logger.warning(
+                    f"Could not connect to live Qdrant server at '{self.host}:{self.port}' ({e}). "
+                    f"Falling back to local disk storage at '{self.storage_path}'..."
+                )
+
+        # Fallback to local disk storage
         try:
-            # Try connecting to HTTP server host/port
-            client = QdrantClient(host=self.host, port=self.port, timeout=2.0)
-            client.get_collections()
-            self._client = client
-            QdrantClientWrapper._shared_client_instance = client
-            logger.info(f"Successfully connected to Qdrant server at '{self.host}:{self.port}'.")
+            self._client = QdrantClient(path=self.storage_path)
+            QdrantClientWrapper._shared_client_instance = self._client
+            logger.info(f"Successfully initialized local Qdrant engine at '{self.storage_path}'.")
             return self._client
-        except Exception as e:
+        except Exception as fallback_err:
             logger.warning(
-                f"Could not connect to live Qdrant server at '{self.host}:{self.port}' ({e}). "
-                f"Falling back to local disk storage at '{self.storage_path}'..."
+                f"Local disk storage failed ({fallback_err}). Falling back to in-memory Qdrant instance..."
             )
             try:
-                # Local disk storage fallback
-                self._client = QdrantClient(path=self.storage_path)
+                self._client = QdrantClient(location=":memory:")
                 QdrantClientWrapper._shared_client_instance = self._client
-                logger.info(f"Successfully initialized local Qdrant engine at '{self.storage_path}'.")
+                logger.info("Successfully initialized in-memory Qdrant client.")
                 return self._client
-            except Exception as fallback_err:
-                logger.warning(
-                    f"Local disk storage failed ({fallback_err}). Falling back to in-memory Qdrant instance..."
-                )
-                try:
-                    self._client = QdrantClient(location=":memory:")
-                    QdrantClientWrapper._shared_client_instance = self._client
-                    logger.info("Successfully initialized in-memory Qdrant client.")
-                    return self._client
-                except Exception as mem_err:
-                    logger.error(f"Failed to initialize Qdrant client: {mem_err}")
-                    raise QdrantClientWrapperError(f"Qdrant connection failed: {str(mem_err)}") from mem_err
+            except Exception as mem_err:
+                logger.error(f"Failed to initialize Qdrant client: {mem_err}")
+                raise QdrantClientWrapperError(f"Qdrant connection failed: {str(mem_err)}") from mem_err
 
     def health_check(self) -> bool:
         """Verifies Qdrant client connectivity and operational health.

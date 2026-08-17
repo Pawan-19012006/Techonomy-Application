@@ -66,6 +66,8 @@ class ChatService:
         query: str,
         top_k: int = settings.RETRIEVAL_TOP_K,
         top_n: int = settings.RETRIEVAL_RERANK_TOP_N,
+        request_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
     ) -> ChatServiceResult:
         """Executes synchronous RAG question answering pipeline with Answer Cache."""
         if not query or not query.strip():
@@ -96,6 +98,8 @@ class ChatService:
                 query=query,
                 top_k=top_k,
                 top_n=top_n,
+                request_id=request_id,
+                tracker=tracker,
             )
             p_time = getattr(retrieval_result, "processing_time", 0.0)
             p_time_str = f"{p_time:.3f}s" if isinstance(p_time, (int, float)) else str(p_time)
@@ -113,7 +117,7 @@ class ChatService:
 
             logger.info("[RAG STEP] LLM REQUEST START")
             t_llm_start = time.perf_counter()
-            answer = self.llm_service.generate(prompt)
+            answer = self.llm_service.generate(prompt, request_id=request_id, tracker=tracker)
             t_llm_generation = time.perf_counter() - t_llm_start
             logger.info(f"[RAG STEP] LLM RESPONSE RECEIVED (Duration: {t_llm_generation:.3f}s)")
 
@@ -155,6 +159,8 @@ class ChatService:
         query: str,
         top_k: int = settings.RETRIEVAL_TOP_K,
         top_n: int = settings.RETRIEVAL_RERANK_TOP_N,
+        request_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
     ) -> ChatServiceResult:
         """Executes asynchronous RAG question answering pipeline with Answer Cache."""
         if not query or not query.strip():
@@ -185,6 +191,8 @@ class ChatService:
                 query=query,
                 top_k=top_k,
                 top_n=top_n,
+                request_id=request_id,
+                tracker=tracker,
             )
             p_time = getattr(retrieval_result, "processing_time", 0.0)
             p_time_str = f"{p_time:.3f}s" if isinstance(p_time, (int, float)) else str(p_time)
@@ -202,7 +210,7 @@ class ChatService:
 
             logger.info("[RAG STEP] LLM REQUEST START")
             t_llm_start = time.perf_counter()
-            answer = await self.llm_service.generate_async(prompt)
+            answer = await self.llm_service.generate_async(prompt, request_id=request_id, tracker=tracker)
             t_llm_generation = time.perf_counter() - t_llm_start
             logger.info(f"[RAG STEP] LLM RESPONSE RECEIVED (Duration: {t_llm_generation:.3f}s)")
 

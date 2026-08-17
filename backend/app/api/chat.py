@@ -4,7 +4,7 @@ import json
 import time
 import uuid
 from typing import Annotated
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.knowledge.rag.llm_gateway import LLMGateway
 from app.schemas.chat import ChatQueryRequest, ChatResponse
 from app.services.team_service import TeamService
 from app.utils.logging import logger
+from app.utils.observability import LatencyTracker
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -43,16 +44,18 @@ async def process_chat_query(
     payload: ChatQueryRequest,
     background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
+    request: Request = None,
 ) -> ChatResponse:
     """Executes RAG chat pipeline and schedules background prompt logging for low-latency HTTP responses."""
-    request_id = str(uuid.uuid4())[:8]
+    req_id = getattr(getattr(request, "state", None), "request_id", None) or str(uuid.uuid4())[:8]
+    tracker = LatencyTracker(request_id=req_id)
     t_req_start = time.perf_counter()
-    logger.info(f"========================================== [REQ ID: {request_id}]")
-    logger.info(f"[RAG STEP] CHAT REQUEST START (req_id={request_id})")
+    logger.info(f"========================================== [REQ ID: {req_id}]")
+    logger.info(f"[RAG STEP] CHAT REQUEST START (req_id={req_id})")
 
     question_text = payload.get_question_text()
     if not question_text:
-        logger.error(f"[RAG STEP] CHAT REQUEST FAILED (req_id={request_id}): Empty question text.")
+        logger.error(f"[RAG STEP] CHAT REQUEST FAILED (req_id={req_id}): Empty question text.")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Question text cannot be empty.",
@@ -61,15 +64,22 @@ async def process_chat_query(
     requested_team_name = (payload.team_name or "TEAM-01").strip()
     logger.info(f"[RAG STEP] QUERY: '{question_text}' | TEAM: '{requested_team_name}'")
 
-    # Team resolution
+    # Team resolution with timing
+    t_db0 = time.perf_counter()
     team = TeamService.get_team(db=db, team_name=requested_team_name)
     if not team:
         team = TeamService.join_team(db=db, team_name=requested_team_name, member_names=[requested_team_name])
+    t_db_team = (time.perf_counter() - t_db0) * 1000.0
+    tracker.record_db_team_lookup(t_db_team)
 
     active_team_name = str(team.team_name)
 
-    # 1. Atomically reserve team prompt quota
+    # 1. Atomically reserve team prompt quota with timing
+    t_db1 = time.perf_counter()
     reserved = TeamService.reserve_team_quota(db=db, team_name=active_team_name)
+    t_db_quota = (time.perf_counter() - t_db1) * 1000.0
+    tracker.record_db_quota_reservation(t_db_quota, reserved=reserved)
+
     if not reserved:
         logger.warning(f"[QUOTA EXCEEDED] Team '{active_team_name}' exceeded prompt question limit.")
         raise HTTPException(
@@ -83,7 +93,11 @@ async def process_chat_query(
 
     try:
         # Execute ChatService RAG pipeline
-        chat_result = await chat_service.ask_async(query=question_text)
+        chat_result = await chat_service.ask_async(
+            query=question_text,
+            request_id=req_id,
+            tracker=tracker,
+        )
 
         # Schedule asynchronous database prompt logging as FastAPI BackgroundTask
         background_tasks.add_task(
@@ -93,31 +107,8 @@ async def process_chat_query(
             response=chat_result.answer,
         )
 
-        t_total = time.perf_counter() - t_req_start
-
-        qp = chat_result.timing.get("query_processing", 0.0)
-        emb = chat_result.timing.get("embedding", 0.0)
-        vsearch = chat_result.timing.get("vector_search", 0.0)
-        rerank = chat_result.timing.get("reranking", 0.0)
-        ctx = chat_result.timing.get("context_building", 0.0)
-        pb = chat_result.timing.get("prompt_building", 0.0)
-        llm = chat_result.timing.get("llm_generation", 0.0)
-
-        timing_log = (
-            f"\n[RAG TIMING BREAKDOWN] (request_id={request_id})\n"
-            f"validation={t_validation:.4f}s\n"
-            f"query_processing={qp:.4f}s\n"
-            f"embedding={emb:.4f}s\n"
-            f"vector_search={vsearch:.4f}s\n"
-            f"reranking={rerank:.4f}s\n"
-            f"context_building={ctx:.4f}s\n"
-            f"prompt_building={pb:.4f}s\n"
-            f"llm_generation={llm:.4f}s\n"
-            f"logging_async=true\n"
-            f"total={t_total:.4f}s\n"
-            f"=========================================="
-        )
-        logger.info(timing_log)
+        t_total_ms = (time.perf_counter() - t_req_start) * 1000.0
+        tracker.emit_summary(rag_total_ms=t_total_ms)
 
         return ChatResponse(
             answer=chat_result.answer,
@@ -144,8 +135,13 @@ async def stream_chat_query(
     payload: ChatQueryRequest,
     background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
+    request: Request = None,
 ):
     """Executes RAG retrieval and streams tokens as Server-Sent Events (SSE)."""
+    req_id = getattr(getattr(request, "state", None), "request_id", None) or str(uuid.uuid4())[:8]
+    tracker = LatencyTracker(request_id=req_id)
+    t_req_start = time.perf_counter()
+
     question_text = payload.get_question_text()
     if not question_text:
         raise HTTPException(
@@ -154,14 +150,20 @@ async def stream_chat_query(
         )
 
     requested_team_name = (payload.team_name or "TEAM-01").strip()
+
+    t_db0 = time.perf_counter()
     team = TeamService.get_team(db=db, team_name=requested_team_name)
     if not team:
         team = TeamService.join_team(db=db, team_name=requested_team_name, member_names=[requested_team_name])
+    tracker.record_db_team_lookup((time.perf_counter() - t_db0) * 1000.0)
 
     active_team_name = str(team.team_name)
 
     # 1. Atomically reserve team prompt quota
+    t_db1 = time.perf_counter()
     reserved = TeamService.reserve_team_quota(db=db, team_name=active_team_name)
+    tracker.record_db_quota_reservation((time.perf_counter() - t_db1) * 1000.0, reserved=reserved)
+
     if not reserved:
         logger.warning(f"[QUOTA EXCEEDED] Team '{active_team_name}' exceeded prompt question limit.")
         raise HTTPException(
@@ -174,7 +176,11 @@ async def stream_chat_query(
     async def event_generator():
         try:
             # Retrieve context
-            retrieval_result = chat_service.retrieval_pipeline.retrieve(query=question_text)
+            retrieval_result = chat_service.retrieval_pipeline.retrieve(
+                query=question_text,
+                request_id=req_id,
+                tracker=tracker,
+            )
             sources = chat_service._extract_sources(retrieval_result)
             prompt = chat_service.prompt_builder.build_prompt(
                 query=question_text,
@@ -185,7 +191,7 @@ async def stream_chat_query(
             full_answer = []
 
             # Yield SSE tokens
-            async for token in gateway.generate_stream_async(prompt):
+            async for token in gateway.generate_stream_async(prompt, request_id=req_id, tracker=tracker):
                 full_answer.append(token)
                 yield f"data: {json.dumps({'token': token})}\n\n"
 
@@ -206,6 +212,9 @@ async def stream_chat_query(
                 "team_name": active_team_name,
             }
             yield f"data: {json.dumps(final_payload)}\n\n"
+
+            t_total_ms = (time.perf_counter() - t_req_start) * 1000.0
+            tracker.emit_summary(rag_total_ms=t_total_ms)
 
         except Exception as e:
             logger.error(f"[RAG STREAM STEP] STREAMING FAILED for Team '{active_team_name}': {e}")

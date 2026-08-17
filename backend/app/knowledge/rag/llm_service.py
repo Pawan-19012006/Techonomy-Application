@@ -1,6 +1,6 @@
 """LLMService wrapping LLMGateway for clean architectural decoupling."""
 
-from typing import Optional
+from typing import Any, Optional
 from app.config import settings
 from app.knowledge.rag.llm_gateway import LLMGateway
 
@@ -30,13 +30,25 @@ class LLMService:
             max_tokens=max_tokens,
         )
 
-    def generate(self, prompt: str, raise_on_missing_key: bool = False) -> str:
+    def generate(
+        self,
+        prompt: str,
+        raise_on_missing_key: bool = False,
+        request_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
+    ) -> str:
         """Executes synchronous text generation via LLMGateway."""
-        return self.gateway.generate(prompt)
+        return self.gateway.generate(prompt, request_id=request_id, tracker=tracker)
 
-    async def generate_async(self, prompt: str, raise_on_missing_key: bool = False) -> str:
+    async def generate_async(
+        self,
+        prompt: str,
+        raise_on_missing_key: bool = False,
+        request_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
+    ) -> str:
         """Executes asynchronous text generation via LLMGateway."""
-        return await self.gateway.generate_async(prompt)
+        return await self.gateway.generate_async(prompt, request_id=request_id, tracker=tracker)
 
     def get_status(self):
         """Returns scheduler telemetry status report."""

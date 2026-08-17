@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     EMBEDDING_BATCH_SIZE: int = 32
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
+    QDRANT_URL: str = ""
+    QDRANT_API_KEY: str = ""
     QDRANT_COLLECTION_NAME: str = "company_knowledge"
     QDRANT_DISTANCE_METRIC: str = "Cosine"
     QDRANT_STORAGE_PATH: str = "./qdrant_storage"
