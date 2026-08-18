@@ -17,6 +17,10 @@ class RetrievalPlan(BaseModel):
 
     intent: str = Field(default="general_inquiry", description="Detected query analytical intent")
     normalized_question: str = Field(default="", description="Normalized user question")
+    question_archetype: str = Field(default="ANALYTICAL", description="SIMPLE_FACTUAL | ANALYTICAL | COMPARATIVE | STRATEGIC_DIAGNOSTIC")
+    response_depth_target: str = Field(default="DETAILED_ANALYSIS", description="Target response depth profile")
+    adaptive_token_budget: int = Field(default=3500, description="Dynamic token ceiling for ContextBuilder")
+    target_top_n: int = Field(default=8, description="Target top N reranked chunks")
     entities: List[str] = Field(default_factory=list, description="Extracted company or product entities")
     required_metrics: List[str] = Field(default_factory=list, description="Metrics or evidence fields required")
     concepts: List[str] = Field(default_factory=list, description="Expanded analytical concepts and terms")
@@ -102,13 +106,40 @@ class InstructionPlanner:
         # 3. Concept & Synonym Expansion
         concept_exp = self.concept_expander.expand(query, instruction_terms=inst_terms)
 
-        # 4. Domain Intent Detection
+        # 4. Domain Intent Detection & Archetype Classification
         intent = "general_analytical_inquiry"
         required_metrics: List[str] = []
         preferred_doc_types: List[str] = []
         operations: List[str] = []
         calculation_reqs: List[str] = []
         cross_domain_reqs: List[str] = []
+
+        # Question Archetype Classification
+        if any(w in normalized_q for w in ["risk assessment", "risks", "achieve", "bottlenecks", "strategic assessment", "overall performance"]):
+            archetype = "STRATEGIC_DIAGNOSTIC"
+            depth_target = "MULTI_SECTION_DEEP_DIVE"
+            token_budget = 4500
+            top_n_val = 10
+        elif any(w in normalized_q for w in ["compare", "changed", "across", "trend", "yoy", "year over year", "growth rate", "period"]):
+            archetype = "COMPARATIVE"
+            depth_target = "STRUCTURED_COMPARISON"
+            token_budget = 4000
+            top_n_val = 10
+        elif any(w in normalized_q for w in ["concern", "concerns", "working capital", "profitability", "issues", "why", "how", "performance", "factors", "drivers", "review"]):
+            archetype = "ANALYTICAL"
+            depth_target = "DETAILED_ANALYSIS"
+            token_budget = 3500
+            top_n_val = 8
+        elif len(normalized_q.split()) <= 6 and not any(w in normalized_q for w in ["why", "how", "concern", "changed", "compare"]):
+            archetype = "SIMPLE_FACTUAL"
+            depth_target = "CONCISE"
+            token_budget = 2000
+            top_n_val = 5
+        else:
+            archetype = "ANALYTICAL"
+            depth_target = "DETAILED_ANALYSIS"
+            token_budget = 3500
+            top_n_val = 8
 
         if any(w in normalized_q for w in ["revenue", "profit", "ebitda", "margin", "expense", "financial", "growth", "cost", "performance", "period", "earnings", "balance", "working capital", "profitability"]):
             intent = "financial_analysis"
@@ -117,7 +148,6 @@ class InstructionPlanner:
             operations.extend(["growth_percentage_calculation", "year_over_year_period_comparison", "margin_analysis"])
             calculation_reqs.extend(["yoy_growth_percentage", "net_profit_margin", "absolute_change"])
 
-            # Check if cross-domain (e.g. costs + sales or marketing + revenue)
             if any(w in normalized_q for w in ["why", "reason", "despite", "drove", "impact"]):
                 cross_domain_reqs.append("financial_cost_operations_correlation")
 
@@ -160,6 +190,10 @@ class InstructionPlanner:
         plan = RetrievalPlan(
             intent=intent,
             normalized_question=normalized_q,
+            question_archetype=archetype,
+            response_depth_target=depth_target,
+            adaptive_token_budget=token_budget,
+            target_top_n=top_n_val,
             required_metrics=list(dict.fromkeys(required_metrics)),
             concepts=concept_exp.primary_concepts + concept_exp.expanded_terms[:10],
             preferred_document_types=list(dict.fromkeys(preferred_doc_types)),
@@ -174,5 +208,5 @@ class InstructionPlanner:
             instruction_chunks_retrieved=len(instruction_chunks),
         )
 
-        logger.info(f"[RETRIEVAL PLAN GENERATED] intent='{plan.intent}' | time_ref='{plan.temporal_reference}' | periods={plan.resolved_periods} | queries={len(plan.company_search_queries)}")
+        logger.info(f"[RETRIEVAL PLAN GENERATED] archetype='{plan.question_archetype}' | intent='{plan.intent}' | budget={plan.adaptive_token_budget} | queries={len(plan.company_search_queries)}")
         return plan

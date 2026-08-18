@@ -193,20 +193,22 @@ class RetrievalPipeline:
                 except Exception as t_err:
                     logger.warning(f"Tracker record failed in retrieve: {t_err}")
 
-            # Stage 4: Reranker on Merged Candidates
+            # Stage 4: Adaptive Reranker on Merged Candidates
             t3 = time.perf_counter()
+            effective_top_n = max(top_n, getattr(retrieval_plan, "target_top_n", top_n))
             reranked_matches = self.reranker.rerank(
                 results=merged_raw_matches,
                 query=processed_query,
-                top_n=top_n,
+                top_n=effective_top_n,
             )
             t_rerank = time.perf_counter() - t3
 
-            # Stage 5: Context Builder
+            # Stage 5: Context Builder with Adaptive Token Ceiling
             t4 = time.perf_counter()
+            effective_budget = token_budget if token_budget is not None else getattr(retrieval_plan, "adaptive_token_budget", settings.RETRIEVAL_CONTEXT_TOKEN_BUDGET)
             context_package = self.context_builder.build_context(
                 reranked_results=reranked_matches,
-                token_budget=token_budget,
+                token_budget=effective_budget,
             )
             t_context = time.perf_counter() - t4
 

@@ -117,9 +117,11 @@ class ChatService:
             logger.info("[RAG STEP] PROMPT BUILD START")
             t_pb_start = time.perf_counter()
             reranked = getattr(retrieval_result, "reranked_results", [])
+            ret_plan = getattr(retrieval_result, "retrieval_plan", None)
             prompt = self.prompt_builder.build_prompt(
                 query=query,
                 chunks=reranked if isinstance(reranked, list) else [],
+                retrieval_plan=ret_plan,
             )
             t_prompt_building = time.perf_counter() - t_pb_start
             logger.info(f"[RAG STEP] PROMPT BUILD END (Duration: {t_prompt_building:.3f}s)")
@@ -210,9 +212,11 @@ class ChatService:
             logger.info("[RAG STEP] PROMPT BUILD START")
             t_pb_start = time.perf_counter()
             reranked = getattr(retrieval_result, "reranked_results", [])
+            ret_plan = getattr(retrieval_result, "retrieval_plan", None)
             prompt = self.prompt_builder.build_prompt(
                 query=query,
                 chunks=reranked if isinstance(reranked, list) else [],
+                retrieval_plan=ret_plan,
             )
             t_prompt_building = time.perf_counter() - t_pb_start
             logger.info(f"[RAG STEP] PROMPT BUILD END (Duration: {t_prompt_building:.3f}s)")
