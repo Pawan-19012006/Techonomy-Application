@@ -5,24 +5,20 @@
 @layer base {
   :root {
     --bg-primary: #F8FAFC;
-    --sidebar-bg: #111827;
+    --sidebar-bg: #18181B;
     --card-bg: #FFFFFF;
-    --border-color: #E5E7EB;
-    --text-primary: #111827;
-    --text-secondary: #6B7280;
-    --primary-indigo: #4F46E5;
-    --primary-indigo-hover: #4338CA;
+    --border-color: #E2E8F0;
+    --text-primary: #0F172A;
+    --text-secondary: #64748B;
   }
 
   .dark {
-    --bg-primary: #0B0F19;
-    --sidebar-bg: #111827;
-    --card-bg: #1E293B;
-    --border-color: #334155;
+    --bg-primary: #090D16;
+    --sidebar-bg: #0F172A;
+    --card-bg: #141C2E;
+    --border-color: #1E293B;
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
-    --primary-indigo: #6366F1;
-    --primary-indigo-hover: #4F46E5;
   }
 
   body {
@@ -30,106 +26,122 @@
     color: var(--text-primary);
     font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
   }
 }
 
-/* Custom Utilities for Enterprise Styling */
-.enterprise-card {
+/* Custom Utilities for Kairos Enterprise Styling */
+.kairos-card, .enterprise-card {
   background-color: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  border: 1px solid #E2E8F0;
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease-in-out;
 }
 
-.dark .enterprise-card {
-  background-color: #1E293B;
+.dark .kairos-card, .dark .enterprise-card {
+  background-color: #141C2E;
+  border-color: #1E293B;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+.kairos-card-hover:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dark .kairos-card-hover:hover {
   border-color: #334155;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
 }
 
-.enterprise-input {
+.kairos-input, .enterprise-input {
   background-color: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  color: #111827;
-  border-radius: 0.5rem;
+  border: 1px solid #E2E8F0;
+  color: #0F172A;
+  border-radius: 0.625rem;
   padding: 0.625rem 0.875rem;
   font-size: 0.875rem;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  transition: all 0.15s ease-in-out;
 }
 
-.dark .enterprise-input {
-  background-color: #0F172A;
-  border-color: #334155;
+.dark .kairos-input, .dark .enterprise-input {
+  background-color: #0B1120;
+  border-color: #1E293B;
   color: #F8FAFC;
 }
 
-.enterprise-input:focus {
+.kairos-input:focus, .enterprise-input:focus {
   outline: none;
-  border-color: #4F46E5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  border-color: #0F172A;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
 }
 
-.dark .enterprise-input:focus {
-  border-color: #6366F1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+.dark .kairos-input:focus, .dark .enterprise-input:focus {
+  border-color: #94A3B8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
 }
 
-.enterprise-btn-primary {
-  background-color: #4F46E5;
+.kairos-btn-primary, .enterprise-btn-primary {
+  background-color: #0F172A;
   color: #FFFFFF;
   font-weight: 500;
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   padding: 0.625rem 1.25rem;
   font-size: 0.875rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  transition: background-color 0.15s ease-in-out;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
-.enterprise-btn-primary:hover {
-  background-color: #4338CA;
-}
-
-.dark .enterprise-btn-primary {
-  background-color: #6366F1;
-}
-
-.dark .enterprise-btn-primary:hover {
-  background-color: #4F46E5;
-}
-
-.enterprise-btn-secondary {
-  background-color: #FFFFFF;
-  color: #111827;
-  border: 1px solid #E5E7EB;
-  font-weight: 500;
-  border-radius: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  font-size: 0.875rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  transition: background-color 0.15s ease-in-out;
-}
-
-.dark .enterprise-btn-secondary {
+.kairos-btn-primary:hover, .enterprise-btn-primary:hover {
   background-color: #1E293B;
+  transform: translateY(-0.5px);
+}
+
+.dark .kairos-btn-primary, .dark .enterprise-btn-primary {
+  background-color: #F8FAFC;
+  color: #0F172A;
+}
+
+.dark .kairos-btn-primary:hover, .dark .enterprise-btn-primary:hover {
+  background-color: #E2E8F0;
+}
+
+.kairos-btn-secondary, .enterprise-btn-secondary {
+  background-color: #FFFFFF;
+  color: #0F172A;
+  border: 1px solid #E2E8F0;
+  font-weight: 500;
+  border-radius: 0.625rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.15s ease-in-out;
+}
+
+.dark .kairos-btn-secondary, .dark .enterprise-btn-secondary {
+  background-color: #141C2E;
   color: #F8FAFC;
+  border-color: #1E293B;
+}
+
+.kairos-btn-secondary:hover, .enterprise-btn-secondary:hover {
+  background-color: #F8FAFC;
+  border-color: #CBD5E1;
+}
+
+.dark .kairos-btn-secondary:hover, .dark .enterprise-btn-secondary:hover {
+  background-color: #1E293B;
   border-color: #334155;
 }
 
-.enterprise-btn-secondary:hover {
-  background-color: rgba(0, 0, 0, 0.03);
-}
-
-.dark .enterprise-btn-secondary:hover {
-  background-color: #334155;
-}
-
-/* Custom Scrollbar for Enterprise UI */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -142,5 +154,5 @@
   border-radius: 3px;
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #334155;
 }
