@@ -126,7 +126,7 @@ async def health_check(db: Session = Depends(get_db)) -> Dict[str, Any]:
 
 
 # Locate Frontend Production Build / Static Directory
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
 ALT_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
