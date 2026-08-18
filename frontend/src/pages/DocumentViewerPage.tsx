@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -196,6 +196,17 @@ export const DocumentViewerPage: React.FC = () => {
   const { docId } = useParams<{ docId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminContext = location.pathname.startsWith('/admin');
+
+  const handleBack = () => {
+    if (isAdminContext) {
+      navigate('/admin/documents');
+    } else {
+      navigate('/documents');
+    }
+  };
+
   const { data: documents = [] } = useDocuments();
 
   const initialPage = parseInt(searchParams.get('page') || '1', 10);
@@ -290,7 +301,7 @@ export const DocumentViewerPage: React.FC = () => {
         {/* Left: Back Button & Title */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/documents')}
+            onClick={handleBack}
             className="kairos-btn-secondary p-2.5 text-xs font-bold flex items-center gap-2"
             title="Back to Library"
           >

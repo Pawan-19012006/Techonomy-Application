@@ -23,6 +23,10 @@ interface AuthContextType {
   timerRemainingSeconds: number;
   isSessionExpired: boolean;
   logout?: () => void;
+  adminToken: string | null;
+  isAdminAuthenticated: boolean;
+  loginAdmin: (token: string) => void;
+  logoutAdmin: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,6 +43,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     return null;
+  });
+
+  const [adminToken, setAdminToken] = useState<string | null>(() => {
+    return localStorage.getItem('kairos_admin_token');
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -112,6 +120,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   };
 
+  const loginAdmin = (token: string) => {
+    localStorage.setItem('kairos_admin_token', token);
+    setAdminToken(token);
+  };
+
+  const logoutAdmin = () => {
+    localStorage.removeItem('kairos_admin_token');
+    setAdminToken(null);
+  };
+
   const refetchTeam = async () => {
     if (user?.team_name) {
       try {
@@ -137,6 +155,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         timerRemainingSeconds,
         isSessionExpired,
         logout: logoutTeam,
+        adminToken,
+        isAdminAuthenticated: !!adminToken,
+        loginAdmin,
+        logoutAdmin,
       }}
     >
       {children}

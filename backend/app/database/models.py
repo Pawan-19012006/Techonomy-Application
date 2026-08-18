@@ -52,6 +52,7 @@ class PromptLogModel(Base):
     )
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     response: Mapped[str] = mapped_column(Text, nullable=False)
+    sources: Mapped[Optional[List[dict]]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationship back to TeamModel

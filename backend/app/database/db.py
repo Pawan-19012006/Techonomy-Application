@@ -57,11 +57,29 @@ def seed_initial_data(db: Session) -> None:
     pass
 
 
+def ensure_schema_migrations() -> None:
+    """Safely applies idempotent schema migrations for PostgreSQL and SQLite."""
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            if str(engine.url).startswith("postgresql"):
+                conn.execute(text("ALTER TABLE prompt_logs ADD COLUMN IF NOT EXISTS sources JSONB;"))
+            else:
+                res = conn.execute(text("PRAGMA table_info(prompt_logs);")).fetchall()
+                col_names = [r[1] for r in res]
+                if "sources" not in col_names:
+                    conn.execute(text("ALTER TABLE prompt_logs ADD COLUMN sources JSON;"))
+        logger.info("Schema migration checks completed.")
+    except Exception as e:
+        logger.warning(f"Schema migration check notice: {e}")
+
+
 def init_db() -> None:
     """Initializes database tables according to SQLAlchemy Declarative models and seeds default data."""
     import app.database.models  # Ensure models are registered on Base.metadata
     logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
+    ensure_schema_migrations()
     logger.info("Database tables initialized successfully.")
 
     db = SessionLocal()

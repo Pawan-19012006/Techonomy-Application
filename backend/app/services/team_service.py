@@ -103,22 +103,19 @@ class TeamService:
         )
 
     @staticmethod
-    def log_prompt(db: Session, team_name: str, prompt: str, response: str) -> PromptLogModel:
-        """Records a successful RAG prompt log entry associated with a team.
-
-        Args:
-            db: Database session.
-            team_name: Submitting team name.
-            prompt: User question prompt.
-            response: RAG response text.
-
-        Returns:
-            PromptLogModel: Persisted prompt log record.
-        """
+    def log_prompt(
+        db: Session,
+        team_name: str,
+        prompt: str,
+        response: str,
+        sources: Optional[List[dict]] = None,
+    ) -> PromptLogModel:
+        """Records a successful RAG prompt log entry associated with a team."""
         log_entry = PromptLogModel(
             team_name=team_name.strip(),
             prompt=prompt,
             response=response,
+            sources=sources,
             created_at=utc_now(),
         )
         db.add(log_entry)

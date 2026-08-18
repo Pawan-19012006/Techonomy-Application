@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api import chat, documents, teams
+from app.api import admin, chat, documents, teams
 from app.config import settings
 from app.database.db import get_db, init_db
 from app.knowledge.indexing.embedder import EmbeddingGenerator
@@ -73,6 +73,7 @@ app.add_exception_handler(Exception, global_exception_handler)
 app.include_router(teams.router, prefix=settings.API_PREFIX)
 app.include_router(chat.router, prefix=settings.API_PREFIX)
 app.include_router(documents.router, prefix=settings.API_PREFIX)
+app.include_router(admin.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/api/status", tags=["Health"], summary="API Status Endpoint")

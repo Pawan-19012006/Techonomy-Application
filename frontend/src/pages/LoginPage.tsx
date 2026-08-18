@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
-import { joinTeam } from '../services/api';
+import { Plus, Trash2, ArrowRight, AlertCircle, Sparkles, ShieldCheck, Users } from 'lucide-react';
+import { joinTeam, adminLoginApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'sonner';
 
@@ -83,9 +83,8 @@ const NetworkBackground: React.FC = () => {
           const dy = other.y - node.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
 
-          if (dist < 140) {
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.08 * (1 - dist / 140)})`;
-            ctx.lineWidth = 0.8;
+          if (dist < 130) {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.12 * (1 - dist / 130)})`;
             ctx.beginPath();
             ctx.moveTo(node.x, node.y);
             ctx.lineTo(other.x, other.y);
@@ -115,12 +114,19 @@ const NetworkBackground: React.FC = () => {
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { loginTeam } = useAuth();
+  const { loginTeam, loginAdmin } = useAuth();
 
+  const [loginRole, setLoginRole] = useState<'PARTICIPANT' | 'ADMIN'>('PARTICIPANT');
+
+  // Participant Form State
   const [teamName, setTeamName] = useState('');
   const [members, setMembers] = useState<MemberRow[]>([
     { id: '1', name: '', roll: '' },
   ]);
+
+  // Admin Form State
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
@@ -147,7 +153,6 @@ export const LoginPage: React.FC = () => {
     setMembers((prev) =>
       prev.map((m) => (m.id === id ? { ...m, [field]: value } : m))
     );
-    // Clear validation error when user types
     setFieldErrors((prev) => {
       const copy = { ...prev };
       delete copy[`${id}_${field}`];
@@ -155,7 +160,7 @@ export const LoginPage: React.FC = () => {
     });
   };
 
-  const validateForm = (): boolean => {
+  const validateParticipantForm = (): boolean => {
     const errors: { [key: string]: string } = {};
 
     if (!teamName.trim()) {
@@ -175,24 +180,21 @@ export const LoginPage: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleParticipantSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!validateForm()) {
+    if (!validateParticipantForm()) {
       return;
     }
 
     try {
       setIsSubmitting(true);
-
-      // Format member string: "Student Name (Roll No)"
       const formattedMemberNames = members.map(
         (m) => `${m.name.trim()}${m.roll.trim() ? ` (${m.roll.trim()})` : ''}`
       );
 
       const teamData = await joinTeam(teamName.trim(), formattedMemberNames);
-
       loginTeam(teamData);
       toast.success(`Welcome ${teamData.team_name}! Entering Kairos.`);
       navigate('/dashboard');
@@ -204,6 +206,30 @@ export const LoginPage: React.FC = () => {
         'Unable to connect to Kairos backend server.';
       setErrorMessage(userMsg);
       toast.error(userMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!adminUsername.trim() || !adminPassword.trim()) {
+      setErrorMessage('Username and password are required.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const res = await adminLoginApi(adminUsername.trim(), adminPassword.trim());
+      loginAdmin(res.access_token);
+      toast.success('Admin authentication successful! Opening Control Panel.');
+      navigate('/admin');
+    } catch (err: any) {
+      console.error('Admin login error:', err);
+      setErrorMessage('Invalid admin credentials.');
+      toast.error('Invalid admin credentials.');
     } finally {
       setIsSubmitting(false);
     }
@@ -238,7 +264,7 @@ export const LoginPage: React.FC = () => {
             KAIROS
           </h1>
           <p className="text-xs sm:text-sm font-bold tracking-[0.35em] uppercase text-slate-400 pl-1">
-            TEAM ENTRY
+            {loginRole === 'ADMIN' ? 'ADMIN ACCESS CONTROL' : 'TEAM ENTRY'}
           </p>
         </div>
 
@@ -249,17 +275,54 @@ export const LoginPage: React.FC = () => {
 
       </div>
 
-      {/* RIGHT SIDE (~50% Viewport) — Team Entry Form */}
+      {/* RIGHT SIDE (~50% Viewport) — Login Form */}
       <div className="lg:w-1/2 w-full flex-1 bg-[#F8FAFC] dark:bg-[#0F172A] flex flex-col justify-center p-6 sm:p-12 lg:p-16 transition-colors overflow-y-auto">
         <div className="max-w-xl w-full mx-auto space-y-8">
           
-          {/* Header */}
+          {/* ROLE SELECTOR TAB TOGGLE */}
+          <div className="flex items-center p-1 rounded-2xl bg-slate-200/80 dark:bg-slate-900 border border-slate-300/80 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginRole('PARTICIPANT');
+                setErrorMessage(null);
+              }}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                loginRole === 'PARTICIPANT'
+                  ? 'bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Participant</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLoginRole('ADMIN');
+                setErrorMessage(null);
+              }}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                loginRole === 'ADMIN'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Admin Access</span>
+            </button>
+          </div>
+
+          {/* Header Title */}
           <div className="space-y-1">
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white uppercase">
-              TEAM ENTRY
+              {loginRole === 'ADMIN' ? 'ADMINISTRATOR ACCESS' : 'TEAM ENTRY'}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              Enter your team details to proceed into the event workspace.
+              {loginRole === 'ADMIN'
+                ? 'Authorized event organizers only. Enter admin credentials.'
+                : 'Enter your team details to proceed into the event workspace.'}
             </p>
           </div>
 
@@ -270,147 +333,168 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* TEAM NAME FIELD */}
-            <div className="space-y-2">
-              <label className="text-xs font-extrabold tracking-wider text-slate-900 dark:text-slate-200 uppercase block">
-                TEAM NAME
-              </label>
-              <input
-                type="text"
-                value={teamName}
-                onChange={(e) => {
-                  setTeamName(e.target.value);
-                  setFieldErrors((prev) => {
-                    const c = { ...prev };
-                    delete c.teamName;
-                    return c;
-                  });
-                }}
-                placeholder="[ Enter team name ]"
-                className={`kairos-input w-full py-3.5 px-4 text-base font-semibold ${
-                  fieldErrors.teamName
-                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
-                    : ''
-                }`}
-              />
-              {fieldErrors.teamName && (
-                <p className="text-xs text-red-500 font-medium pl-1">
-                  {fieldErrors.teamName}
-                </p>
-              )}
-            </div>
-
-            {/* TEAM MEMBERS SECTION */}
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold tracking-wider text-slate-900 dark:text-slate-200 uppercase">
-                  TEAM MEMBERS ({members.length}/{MAX_MEMBERS})
-                </span>
-
-                {members.length < MAX_MEMBERS && (
-                  <button
-                    type="button"
-                    onClick={handleAddMember}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-950 text-xs font-bold hover:opacity-90 transition-all shadow-sm active:scale-95"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Member</span>
-                  </button>
+          {/* PARTICIPANT LOGIN FORM */}
+          {loginRole === 'PARTICIPANT' ? (
+            <form onSubmit={handleParticipantSubmit} className="space-y-6">
+              
+              {/* TEAM NAME FIELD */}
+              <div className="space-y-2">
+                <label className="text-xs font-extrabold tracking-wider text-slate-900 dark:text-slate-200 uppercase block">
+                  TEAM NAME
+                </label>
+                <input
+                  type="text"
+                  value={teamName}
+                  onChange={(e) => {
+                    setTeamName(e.target.value);
+                    setFieldErrors((prev) => {
+                      const c = { ...prev };
+                      delete c.teamName;
+                      return c;
+                    });
+                  }}
+                  placeholder="Enter team name"
+                  className={`kairos-input w-full py-3.5 px-4 text-base font-semibold ${
+                    fieldErrors.teamName
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                      : ''
+                  }`}
+                />
+                {fieldErrors.teamName && (
+                  <p className="text-xs text-red-500 font-medium pl-1">
+                    {fieldErrors.teamName}
+                  </p>
                 )}
               </div>
 
-              {/* Members Rows */}
-              <div className="space-y-3">
-                {members.map((member, idx) => (
-                  <div
-                    key={member.id}
-                    className="p-3.5 rounded-xl bg-white dark:bg-[#141C2E] border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-2 transition-all duration-200"
-                  >
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      <span>MEMBER {idx + 1}</span>
-                      {members.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMember(member.id)}
-                          className="text-slate-400 hover:text-red-500 transition-colors p-1"
-                          title="Remove Member"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
+              {/* TEAM MEMBERS SECTION */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold tracking-wider text-slate-900 dark:text-slate-200 uppercase">
+                    TEAM MEMBERS ({members.length}/{MAX_MEMBERS})
+                  </span>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                      {/* Student Name */}
-                      <div className="sm:col-span-7 space-y-1">
-                        <input
-                          type="text"
-                          value={member.name}
-                          onChange={(e) =>
-                            handleMemberChange(member.id, 'name', e.target.value)
-                          }
-                          placeholder="Student Name"
-                          className={`kairos-input w-full py-2.5 px-3 text-sm ${
-                            fieldErrors[`${member.id}_name`]
-                              ? 'border-red-500'
-                              : ''
-                          }`}
-                        />
-                        {fieldErrors[`${member.id}_name`] && (
-                          <p className="text-[10px] text-red-500 font-medium">
-                            {fieldErrors[`${member.id}_name`]}
-                          </p>
+                  {members.length < MAX_MEMBERS && (
+                    <button
+                      type="button"
+                      onClick={handleAddMember}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-950 text-xs font-bold hover:opacity-90 transition-all shadow-sm active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Member</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {members.map((m, index) => (
+                    <div
+                      key={m.id}
+                      className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 transition-all shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-mono font-bold text-slate-400 uppercase">
+                          MEMBER {index + 1}
+                        </span>
+                        {members.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMember(m.id)}
+                            className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                            title="Remove Member"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </div>
 
-                      {/* Roll Number */}
-                      <div className="sm:col-span-5 space-y-1">
-                        <input
-                          type="text"
-                          value={member.roll}
-                          onChange={(e) =>
-                            handleMemberChange(member.id, 'roll', e.target.value)
-                          }
-                          placeholder="Roll Number"
-                          className={`kairos-input w-full py-2.5 px-3 text-sm ${
-                            fieldErrors[`${member.id}_roll`]
-                              ? 'border-red-500'
-                              : ''
-                          }`}
-                        />
-                        {fieldErrors[`${member.id}_roll`] && (
-                          <p className="text-[10px] text-red-500 font-medium">
-                            {fieldErrors[`${member.id}_roll`]}
-                          </p>
-                        )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <input
+                            type="text"
+                            value={m.name}
+                            onChange={(e) => handleMemberChange(m.id, 'name', e.target.value)}
+                            placeholder="Student Full Name"
+                            className={`kairos-input w-full text-xs py-2 px-3 ${
+                              fieldErrors[`${m.id}_name`]
+                                ? 'border-red-500 focus:border-red-500'
+                                : ''
+                            }`}
+                          />
+                        </div>
+
+                        <div>
+                          <input
+                            type="text"
+                            value={m.roll}
+                            onChange={(e) => handleMemberChange(m.id, 'roll', e.target.value)}
+                            placeholder="Roll Number"
+                            className={`kairos-input w-full text-xs py-2 px-3 ${
+                              fieldErrors[`${m.id}_roll`]
+                                ? 'border-red-500 focus:border-red-500'
+                                : ''
+                            }`}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* ENTER KAIROS CTA BUTTON */}
-            <div className="pt-4">
+              {/* SUBMIT BUTTON */}
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-4 px-6 rounded-xl font-extrabold text-sm sm:text-base tracking-wider uppercase bg-slate-950 text-white dark:bg-white dark:text-slate-950 hover:bg-slate-800 dark:hover:bg-slate-100 transition-all duration-150 shadow-md flex items-center justify-center gap-3 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed group"
+                className="kairos-btn-primary w-full py-4 text-base font-bold uppercase tracking-wider flex items-center justify-center gap-2 group shadow-md"
               >
-                {isSubmitting ? (
-                  <span>ENTERING KAIROS...</span>
-                ) : (
-                  <>
-                    <span>ENTER KAIROS</span>
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
+                <span>{isSubmitting ? 'JOINING ARENA...' : 'ENTER KAIROS ARENA'}</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
-            </div>
 
-          </form>
+            </form>
+          ) : (
+            /* ADMIN LOGIN FORM */
+            <form onSubmit={handleAdminSubmit} className="space-y-6">
+              
+              <div className="space-y-2">
+                <label className="text-xs font-extrabold tracking-wider text-slate-900 dark:text-slate-200 uppercase block">
+                  ADMIN USERNAME
+                </label>
+                <input
+                  type="text"
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  placeholder="Username"
+                  className="kairos-input w-full py-3.5 px-4 text-base font-semibold"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-extrabold tracking-wider text-slate-900 dark:text-slate-200 uppercase block">
+                  ADMIN PASSWORD
+                </label>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="Password"
+                  className="kairos-input w-full py-3.5 px-4 text-base font-semibold"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="kairos-btn-primary w-full py-4 text-base font-bold uppercase tracking-wider flex items-center justify-center gap-2 group shadow-md bg-indigo-600 hover:bg-indigo-500"
+              >
+                <span>{isSubmitting ? 'VERIFYING...' : 'ENTER ADMIN CONTROL PANEL'}</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+
+            </form>
+          )}
+
         </div>
       </div>
 

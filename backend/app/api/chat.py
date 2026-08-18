@@ -3,7 +3,7 @@
 import json
 import time
 import uuid
-from typing import Annotated
+from typing import Annotated, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -19,7 +19,12 @@ from app.utils.observability import LatencyTracker
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
-def _async_log_prompt(team_name: str, prompt: str, response: str) -> None:
+def _async_log_prompt(
+    team_name: str,
+    prompt: str,
+    response: str,
+    sources: Optional[List[dict]] = None,
+) -> None:
     """FastAPI BackgroundTask helper that writes prompt log asynchronously without blocking HTTP response."""
     db = SessionLocal()
     try:
@@ -29,6 +34,7 @@ def _async_log_prompt(team_name: str, prompt: str, response: str) -> None:
             team_name=team_name,
             prompt=prompt,
             response=response,
+            sources=sources,
         )
         duration = time.perf_counter() - t0
         logger.info(f"[ASYNC PERSISTENCE] Logged prompt entry for Team '{team_name}' in {duration:.4f}s.")
@@ -113,6 +119,7 @@ async def process_chat_query(
             team_name=active_team_name,
             prompt=question_text,
             response=chat_result.answer,
+            sources=[s.model_dump() for s in chat_result.sources] if chat_result.sources else None,
         )
 
         t_total_ms = (time.perf_counter() - t_req_start) * 1000.0
@@ -219,6 +226,7 @@ async def stream_chat_query(
                 team_name=active_team_name,
                 prompt=question_text,
                 response=complete_text,
+                sources=[s.model_dump() for s in sources] if sources else None,
             )
 
             # Emit completion payload with sources

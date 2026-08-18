@@ -50,6 +50,11 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in val.split(",") if origin.strip()]
         return self.CORS_ORIGINS
 
+    # Admin Credentials Configuration
+    ADMIN_USERNAME: str = "kairos@csbs"
+    ADMIN_PASSWORD: str = "kairospass"
+    ADMIN_SECRET_KEY: str = "kairos_admin_secret_token_2026_key"
+
     # Event Configuration
     EVENT_DURATION_MINUTES: int = 60
 

@@ -139,3 +139,51 @@ export const getDocuments = async (): Promise<any[]> => {
 export const getDocumentFileUrl = (document_id: string): string => {
   return `${API_BASE_URL}/api/documents/${encodeURIComponent(document_id)}/file`;
 };
+
+/**
+ * 6. Admin Login
+ * POST /api/admin/login
+ */
+export const adminLoginApi = async (
+  username: string,
+  password: string
+): Promise<{ access_token: string; username: string; role: string }> => {
+  const response = await apiClient.post<{ access_token: string; username: string; role: string }>(
+    '/api/admin/login',
+    { username, password }
+  );
+  return response.data;
+};
+
+/**
+ * 7. Admin Overview Metrics
+ * GET /api/admin/overview
+ */
+export const getAdminOverviewApi = async (token: string): Promise<any> => {
+  const response = await apiClient.get<any>('/api/admin/overview', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return response.data;
+};
+
+/**
+ * 8. Admin Registered Teams List
+ * GET /api/admin/teams
+ */
+export const getAdminTeamsApi = async (token: string): Promise<any[]> => {
+  const response = await apiClient.get<any[]>('/api/admin/teams', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return response.data;
+};
+
+/**
+ * 9. Admin Team Detail & Prompt Execution History
+ * GET /api/admin/teams/{team_name}
+ */
+export const getAdminTeamDetailApi = async (token: string, team_name: string): Promise<any> => {
+  const response = await apiClient.get<any>(`/api/admin/teams/${encodeURIComponent(team_name)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return response.data;
+};

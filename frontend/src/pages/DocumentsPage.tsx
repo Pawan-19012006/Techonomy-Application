@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, FileText, CheckCircle2, BookOpen, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useDocuments } from '../hooks/useDocuments';
 import { TableRowSkeleton } from '../components/common/LoadingSkeleton';
@@ -8,8 +8,16 @@ import { ErrorState } from '../components/common/ErrorState';
 
 export const DocumentsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminContext = location.pathname.startsWith('/admin');
+
   const { data: documents = [], isLoading, isError, refetch } = useDocuments();
   const [searchTerm, setSearchTerm] = useState('');
+
+  const handleOpenDoc = (filename: string) => {
+    const prefix = isAdminContext ? '/admin/documents' : '/documents';
+    navigate(`${prefix}/${encodeURIComponent(filename)}`);
+  };
 
   const filteredDocuments = useMemo(() => {
     return documents.filter((doc) =>
@@ -125,7 +133,7 @@ export const DocumentsPage: React.FC = () => {
                 </span>
 
                 <button
-                  onClick={() => navigate(`/documents/${encodeURIComponent(doc.filename)}`)}
+                  onClick={() => handleOpenDoc(doc.filename)}
                   className="kairos-btn-primary py-2.5 px-4 text-xs font-bold uppercase tracking-wider flex items-center gap-2 group-hover:translate-x-0.5 transition-all"
                 >
                   <span>View Document</span>
