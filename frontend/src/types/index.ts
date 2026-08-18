@@ -84,14 +84,14 @@ export interface DashboardData {
 }
 
 export interface DocumentMetadata {
-  id: number;
+  id: string | number;
   filename: string;
   file_path: string;
   file_size: number;
   content_type: string;
   pages: number;
   status: string;
-  team_id: number;
+  team_id?: number;
   uploaded_at: string;
 }
 

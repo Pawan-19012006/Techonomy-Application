@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Bot, User, Sparkles, FileText, Copy, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bot, User, Sparkles, FileText, Copy, Check, ExternalLink } from 'lucide-react';
 import { ChatMessage as ChatMessageType } from '../../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { toast } from 'sonner';
@@ -10,6 +11,7 @@ interface ChatMessageProps {
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }) => {
+  const navigate = useNavigate();
   const isUser = message.sender === 'user';
   const hasSources = !isUser && message.sources && message.sources.length > 0;
   const [copied, setCopied] = useState(false);
@@ -20,6 +22,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }
     setCopied(true);
     toast.success('Response copied to clipboard');
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCitationClick = (docName: string, pageNum?: number | null) => {
+    const cleanDoc = docName.trim();
+    const pageParam = pageNum && pageNum > 0 ? `?page=${pageNum}` : '';
+    navigate(`/documents/${encodeURIComponent(cleanDoc)}${pageParam}`);
   };
 
   return (
@@ -58,22 +66,27 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {message.sources!.map((source, idx) => (
-                  <div
+                  <button
                     key={idx}
-                    className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-xs"
+                    onClick={() => handleCitationClick(source.document, source.page)}
+                    className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/90 border border-slate-200/80 dark:border-slate-800 text-xs text-left transition-all group cursor-pointer"
+                    title={`Open ${source.document} at Page ${source.page || 1}`}
                   >
-                    <div className="p-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                      <FileText className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+                    <div className="flex items-center gap-2.5 truncate flex-1">
+                      <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="truncate flex-1">
+                        <p className="font-bold text-slate-950 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {source.document}
+                        </p>
+                        <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                          {source.page != null ? `Page ${source.page}` : 'Verified Source'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="truncate flex-1">
-                      <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                        {source.document}
-                      </p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                        {source.page != null ? `Page ${source.page}` : 'Verified Vector Match'}
-                      </p>
-                    </div>
-                  </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white shrink-0 group-hover:translate-x-0.5 transition-all" />
+                  </button>
                 ))}
               </div>
             </div>

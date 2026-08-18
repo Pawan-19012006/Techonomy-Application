@@ -123,3 +123,19 @@ export const getTeamPrompts = async (team_name: string): Promise<PromptLog[]> =>
   const response = await apiClient.get<PromptLog[]>(`/api/teams/${encodeURIComponent(team_name)}/prompts`);
   return response.data;
 };
+
+/**
+ * 5. Discover Official Competition Documents
+ * GET /api/documents
+ */
+export const getDocuments = async (): Promise<any[]> => {
+  const response = await apiClient.get<any[]>('/api/documents');
+  return response.data;
+};
+
+/**
+ * Helper to construct safe backend file download/view URL
+ */
+export const getDocumentFileUrl = (document_id: string): string => {
+  return `${API_BASE_URL}/api/documents/${encodeURIComponent(document_id)}/file`;
+};

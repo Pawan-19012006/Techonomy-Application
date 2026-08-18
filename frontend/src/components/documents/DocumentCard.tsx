@@ -5,7 +5,7 @@ import { DocumentMetadata } from '../../types';
 interface DocumentCardProps {
   document: DocumentMetadata;
   onView: (doc: DocumentMetadata) => void;
-  onDelete: (docId: number) => void;
+  onDelete: (docId: string | number) => void;
 }
 
 export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onView, onDelete }) => {

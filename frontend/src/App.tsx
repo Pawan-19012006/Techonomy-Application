@@ -11,6 +11,7 @@ import { AppLayout } from './components/layouts/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DocumentsPage } from './pages/DocumentsPage';
+import { DocumentViewerPage } from './pages/DocumentViewerPage';
 import { KnowledgeAssistantPage } from './pages/KnowledgeAssistantPage';
 import { RulesPage } from './pages/RulesPage';
 import { TeamPage } from './pages/TeamPage';
@@ -42,6 +43,7 @@ export const App: React.FC = () => {
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/documents" element={<DocumentsPage />} />
+                  <Route path="/documents/:docId" element={<DocumentViewerPage />} />
                   <Route path="/assistant" element={<KnowledgeAssistantPage />} />
                   <Route path="/rules" element={<RulesPage />} />
                   <Route path="/team" element={<TeamPage />} />
