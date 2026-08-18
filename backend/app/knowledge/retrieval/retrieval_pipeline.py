@@ -97,6 +97,7 @@ class RetrievalPipeline:
             company_filters.document_type = "company"
             company_filters.visibility = "user_visible"
 
+            doc_chunk_counts = {}
             for sq in combined_queries:
                 sq_processed = self.query_processor.process(sq)
 
@@ -114,7 +115,7 @@ class RetrievalPipeline:
                 )
                 t_search_total += time.perf_counter() - t2
 
-                # Deduplicate candidates across queries and enforce company boundary
+                # Deduplicate candidates across queries and enforce company boundary & document diversification
                 for match in sq_matches:
                     doc_type = getattr(match, "document_type", "company")
                     vis = getattr(match, "visibility", "user_visible")
@@ -122,11 +123,49 @@ class RetrievalPipeline:
                     if doc_type == "instruction" or vis == "internal":
                         continue
 
+                    # Document Diversification Cap: Prevent a single document from monopolizing candidates
+                    dname = match.document_name
+                    if doc_chunk_counts.get(dname, 0) >= 3:
+                        continue
+
                     pages_tuple = tuple(sorted(match.page_numbers)) if match.page_numbers else ()
                     unique_key = (match.document_name, pages_tuple, match.chunk_id)
                     if unique_key not in seen_keys:
                         seen_keys.add(unique_key)
+                        doc_chunk_counts[dname] = doc_chunk_counts.get(dname, 0) + 1
                         merged_raw_matches.append(match)
+
+            # STAGE 2.5: Evidence Coverage Assessment & Iterative Second-Pass Retrieval
+            from app.knowledge.retrieval.evidence_checker import EvidenceChecker
+            evidence_checker = EvidenceChecker()
+            coverage_report = evidence_checker.check_coverage(
+                candidates=merged_raw_matches,
+                required_metrics=retrieval_plan.required_metrics,
+                intent=retrieval_plan.intent,
+            )
+
+            if not coverage_report.is_sufficient and coverage_report.targeted_fallback_queries:
+                logger.info(f"[ITERATIVE RETRIEVAL] Coverage incomplete (Missing: {coverage_report.missing_metrics}). Executing {len(coverage_report.targeted_fallback_queries)} targeted fallback queries...")
+                for fb_sq in coverage_report.targeted_fallback_queries:
+                    fb_proc = self.query_processor.process(fb_sq)
+                    fb_vec = self.query_embedder.embed_query(fb_proc)
+                    fb_hits = self.vector_search.search(
+                        query_vector=fb_vec,
+                        top_k=top_k,
+                        filters=company_filters,
+                        collection_name=settings.QDRANT_COMPANY_COLLECTION_NAME,
+                    )
+                    for match in fb_hits:
+                        doc_type = getattr(match, "document_type", "company")
+                        vis = getattr(match, "visibility", "user_visible")
+                        if doc_type == "instruction" or vis == "internal":
+                            continue
+
+                        pages_tuple = tuple(sorted(match.page_numbers)) if match.page_numbers else ()
+                        unique_key = (match.document_name, pages_tuple, match.chunk_id)
+                        if unique_key not in seen_keys:
+                            seen_keys.add(unique_key)
+                            merged_raw_matches.append(match)
 
             embed_ms = t_embed_total * 1000.0
             qdrant_ms = t_search_total * 1000.0

@@ -89,12 +89,27 @@ class Reranker:
                 is_heading = item.section_type in ("heading", "title") or item.hierarchy_level <= 2
                 h_boost = self.heading_boost if is_heading else 0.0
 
+                # 5. Numerical & Analytical Evidence Density Boost
+                content_lower = item.content.lower()
+                num_matches = len(re.findall(r"\b\d+(?:\.\d+)?%?|\b(?:revenue|ebitda|profit|margin|income|cogs|growth|operating|lakh|crore|thousand)\b", content_lower))
+                n_boost = min(0.15, num_matches * 0.025) if any(w in query_words for w in ["financial", "performance", "revenue", "profit", "ebitda", "margin", "growth", "cost", "vendor", "sales", "period", "compare"]) else 0.0
+
+                # 6. Structured Financial Table & Multi-Period Metric Boost
+                table_lines = [
+                    line for line in item.content.split("\n")
+                    if any(m in line.lower() for m in ["revenue", "profit", "margin", "ebit", "operating", "cogs", "expenses", "sales", "net"])
+                    and any(char.isdigit() for char in line)
+                ]
+                t_table_boost = 0.18 if len(table_lines) >= 2 else (0.10 if len(table_lines) == 1 else 0.0)
+
                 # Calculate composite hybrid score
                 final_score = (
                     (self.semantic_weight * sem_score)
                     + (self.keyword_weight * kw_score)
                     + t_boost
                     + h_boost
+                    + n_boost
+                    + t_table_boost
                 )
 
                 # Clone SearchResult with updated reranked score
@@ -102,6 +117,8 @@ class Reranker:
                     chunk_id=item.chunk_id,
                     document_id=item.document_id,
                     document_name=item.document_name,
+                    document_type=getattr(item, "document_type", "company"),
+                    visibility=getattr(item, "visibility", "user_visible"),
                     score=round(final_score, 4),
                     content=item.content,
                     page_numbers=item.page_numbers,
@@ -117,8 +134,27 @@ class Reranker:
             # Sort by combined score descending
             reranked.sort(key=lambda x: x.score, reverse=True)
 
-            selected = reranked[:limit_n]
-            logger.info(f"Successfully reranked {len(results)} results into top {len(selected)} matches.")
+            # Diversity selection: Max 2 chunks per document in top_n final selection
+            selected: List[SearchResult] = []
+            selected_doc_counts = {}
+            for candidate in reranked:
+                dname = candidate.document_name
+                if selected_doc_counts.get(dname, 0) < 2 or len(selected) < limit_n // 2:
+                    selected.append(candidate)
+                    selected_doc_counts[dname] = selected_doc_counts.get(dname, 0) + 1
+
+                if len(selected) >= limit_n:
+                    break
+
+            # Fallback if diversity selection yielded fewer than limit_n
+            if len(selected) < limit_n:
+                for candidate in reranked:
+                    if candidate not in selected:
+                        selected.append(candidate)
+                        if len(selected) >= limit_n:
+                            break
+
+            logger.info(f"Successfully reranked {len(results)} results into top {len(selected)} matches across {len(selected_doc_counts)} documents.")
             return selected
 
         except Exception as e:

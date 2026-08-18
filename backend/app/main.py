@@ -39,6 +39,33 @@ async def lifespan(app: FastAPI) -> Generator[None, None, None]:
     except Exception as e:
         logger.error(f"[STARTUP WARNING] Could not pre-load embedding model: {e}")
 
+    # Ensure vector DB collections are populated (auto-ingest if empty)
+    try:
+        from app.knowledge.indexing.collection_manager import CollectionManager
+        from app.knowledge.ingestion.ingest import ingest_company_pdf, ingest_instruction_pdf
+
+        comp_mgr = CollectionManager(collection_name=settings.QDRANT_COMPANY_COLLECTION_NAME)
+        comp_info = comp_mgr.get_info()
+        comp_cnt = comp_info.get("points_count", 0) if isinstance(comp_info, dict) else 0
+
+        if comp_cnt == 0:
+            logger.info("[STARTUP AUTO-INGEST] Company collection is empty! Auto-ingesting company PDFs...")
+            company_dir = settings.BASE_DIR / "data" / "documents" / "company"
+            for pdf in sorted(list(company_dir.glob("*.pdf"))):
+                ingest_company_pdf(pdf)
+
+        inst_mgr = CollectionManager(collection_name=settings.QDRANT_INSTRUCTION_COLLECTION_NAME)
+        inst_info = inst_mgr.get_info()
+        inst_cnt = inst_info.get("points_count", 0) if isinstance(inst_info, dict) else 0
+
+        if inst_cnt == 0:
+            logger.info("[STARTUP AUTO-INGEST] Instruction collection is empty! Auto-ingesting instruction PDFs...")
+            inst_dir = settings.BASE_DIR / "data" / "documents" / "instructions"
+            for pdf in sorted(list(inst_dir.glob("*.pdf"))):
+                ingest_instruction_pdf(pdf)
+    except Exception as exc:
+        logger.warning(f"[STARTUP VECTOR CHECK] Vector collection verification note: {exc}")
+
     startup_time = time.perf_counter() - t0
     logger.info(f"[STARTUP COMPLETE] Application initialized successfully in {startup_time:.3f}s.")
 

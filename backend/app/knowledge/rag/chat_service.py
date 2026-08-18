@@ -41,8 +41,11 @@ class ChatService:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.llm_service = llm_service or LLMService()
 
-    def _extract_sources(self, retrieval_result: RetrievalResult) -> List[SourceItem]:
+    def _extract_sources(self, retrieval_result: RetrievalResult, answer: str = "") -> List[SourceItem]:
         """Extracts unique document and page citations from company retrieval results ONLY."""
+        if "available company documents do not contain sufficient evidence" in answer.lower():
+            return []
+
         sources: List[SourceItem] = []
         seen = set()
 
@@ -127,7 +130,7 @@ class ChatService:
             t_llm_generation = time.perf_counter() - t_llm_start
             logger.info(f"[RAG STEP] LLM RESPONSE RECEIVED (Duration: {t_llm_generation:.3f}s)")
 
-            sources = self._extract_sources(retrieval_result)
+            sources = self._extract_sources(retrieval_result, answer=answer)
             confidence = None
             if isinstance(reranked, list) and len(reranked) > 0 and hasattr(reranked[0], "score"):
                 try:
@@ -220,7 +223,7 @@ class ChatService:
             t_llm_generation = time.perf_counter() - t_llm_start
             logger.info(f"[RAG STEP] LLM RESPONSE RECEIVED (Duration: {t_llm_generation:.3f}s)")
 
-            sources = self._extract_sources(retrieval_result)
+            sources = self._extract_sources(retrieval_result, answer=answer)
             confidence = None
             if isinstance(reranked, list) and len(reranked) > 0 and hasattr(reranked[0], "score"):
                 try:

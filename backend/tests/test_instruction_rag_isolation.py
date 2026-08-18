@@ -131,10 +131,55 @@ def test_5_prompt_builder_company_evidence_isolation():
     assert "Instruction content" not in formatted_context
 
 
-def test_6_independent_resets():
-    """Test 6: Verify independent reset functions recreate specific collections without error."""
+def test_6_financial_performance_query_retrieval_quality():
+    """Test 6: Verify two-stage retrieval retrieves high-quality numerical financial evidence for performance queries."""
+    from pathlib import Path
+    from app.knowledge.ingestion.ingest import ingest_company_pdf
+    from app.knowledge.indexing.collection_manager import CollectionManager
+
+    # Ensure company_knowledge has points if a reset cleared it
+    col_mgr = CollectionManager(collection_name=settings.QDRANT_COMPANY_COLLECTION_NAME)
+    info = col_mgr.get_info()
+    points_cnt = info.get("points_count", 0) if isinstance(info, dict) else 0
+
+    if points_cnt == 0:
+        company_dir = settings.BASE_DIR / "data" / "documents" / "company"
+        for pdf in list(company_dir.glob("*.pdf"))[:5]:
+            ingest_company_pdf(pdf)
+
+    pipeline = RetrievalPipeline()
+    query = "Compare the company's financial performance across the available reporting periods and identify the key areas of improvement and concern."
+    
+    result = pipeline.retrieve(query=query)
+    assert hasattr(result, "reranked_results")
+    assert len(result.reranked_results) > 0
+
+    # Verify at least one top reranked result contains numerical financial data (revenue, profit, margin, ebitda, numbers)
+    top_texts = [r.content.lower() for r in result.reranked_results[:3]]
+    has_numerical_evidence = any(
+        any(metric in txt for metric in ["revenue", "profit", "margin", "ebit", "gross", "crore", "lakh", "%"])
+        and any(char.isdigit() for char in txt)
+        for txt in top_texts
+    )
+    assert has_numerical_evidence is True, "Top reranked results failed to include numerical financial evidence!"
+
+
+def test_7_independent_resets():
+    """Test 7: Verify independent reset functions recreate specific collections without error."""
+    from app.knowledge.ingestion.ingest import ingest_company_pdf, ingest_instruction_pdf
+
     success_comp = reset_company_knowledge()
     assert success_comp is True
 
     success_inst = reset_instruction_knowledge()
     assert success_inst is True
+
+    # Re-ingest sample datasets so vector store is preserved for live usage
+    company_dir = settings.BASE_DIR / "data" / "documents" / "company"
+    for pdf in sorted(list(company_dir.glob("*.pdf"))):
+        ingest_company_pdf(pdf)
+
+    inst_dir = settings.BASE_DIR / "data" / "documents" / "instructions"
+    for pdf in sorted(list(inst_dir.glob("*.pdf"))):
+        ingest_instruction_pdf(pdf)
+

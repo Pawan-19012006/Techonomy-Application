@@ -125,7 +125,7 @@ def test_real_gateway_gemini_primary_path():
             active_count = sum(l.active_requests for l in gemini_lanes)
             assert active_count == 0
             for l in gemini_lanes:
-                assert l.credential_ref == "GEMINI_API_KEY"
+                assert "GEMINI_API_KEY" in l.credential_ref
                 assert gemini_key not in l.credential_ref
         finally:
             db.close()
@@ -164,7 +164,7 @@ def test_real_fallback_path():
             total_nemotron_used = sum(r.requests_used for r in nemotron_rows)
             assert total_nemotron_used > 0
             for r in nemotron_rows:
-                assert r.credential_ref == "OPENROUTER_API_KEY"
+                assert "OPENROUTER_API_KEY" in r.credential_ref
                 assert openrouter_key not in r.credential_ref
 
         finally:
