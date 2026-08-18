@@ -1,452 +1,680 @@
-# Techonomy
+# Techonomy / Kairos
 
-**Techonomy** is a production-grade, RAG-based (Retrieval-Augmented Generation) knowledge intelligence platform built for hackathons and technical competition events. It provides automated, verified, and context-aware responses to participant questions based on official event documentation.
+**Techonomy (Kairos Intelligence System)** is an enterprise-grade, instruction-guided Retrieval-Augmented Generation (RAG) platform. It provides automated, verified, grounded, and multi-document synthesized answers to complex financial, operational, sales, marketing, and strategic questions based on official company documentation.
 
-### Production Architecture Summary
+### The Fundamental Dataset Distinction
 
-- **Backend**: FastAPI (Python 3.13) serving REST endpoints, SSE streams, and production React SPA assets.
-- **Frontend**: React 19 + TailwindCSS v4 SPA (built via Node 20 multi-stage Docker build).
-- **Embeddings**: Local `BAAI/bge-small-en-v1.5` (384-dimensional dense vectors, CPU-optimized).
-- **Vector Database**: Qdrant Cloud cluster (or local Qdrant container fallback).
-- **Relational Database**: PostgreSQL (Supabase Cloud or local Docker PostgreSQL container fallback).
-- **LLM Load Balancing**: 20-Lane Priority Scheduler with 10 Gemini primary keys (`G01–G10`) and 10 OpenRouter / Nemotron 3.5 fallback keys (`N01–N10`).
-- **Containerization**: Single-command container deployment via Docker Compose.
-- **Public Tunneling**: Single-port public ingress via `ngrok`.
+The system enforces a strict architectural and security boundary between two isolated datasets:
 
----
-
-## 1. Prerequisites
-
-The host machine running the Techonomy platform requires ONLY:
-
-1. **Git**: To clone the repository.
-2. **Docker Desktop** (or Docker Engine + Docker Compose): To build and run all services in isolated containers.
-3. **ngrok CLI**: To expose the host's single port (`8000`) securely to the internet.
-4. **Active Internet Connection**: Required to connect to Qdrant Cloud, Gemini / OpenRouter APIs, and download the embedding model on first run.
-
-> [!NOTE]
-> The host machine **does NOT require** Python, Node.js, npm, PostgreSQL, Qdrant, CUDA, or PyTorch installed locally. All build tools, runtime environments, native dependencies, and PyTorch (CPU-only build) are handled automatically inside Docker containers.
+- **COMPANY DATA (`company_knowledge`)**:
+  - Contains official company annual reports, financial statements, sales reports, customer analytics, and operational metrics.
+  - Marked as `document_type = "company"` and `visibility = "user_visible"`.
+  - **The sole source of factual evidence** for participant answers. User-visible in citations, document lists, and the in-app PDF document viewer.
+- **INSTRUCTION DATA (`instruction_knowledge`)**:
+  - Contains internal analytical frameworks, evaluation guides, financial principles, and query planning playbooks.
+  - Marked as `document_type = "instruction"` and `visibility = "internal"`.
+  - **Used exclusively by the Stage 1 Planner** to determine *HOW* to analyze questions, extract required metrics, resolve temporal references, and formulate targeted search queries.
+  - **STRICTLY INTERNAL**: Internal instruction content is NEVER exposed to users, NEVER cited, NEVER listed on the Documents page, and CANNOT be accessed via public document APIs.
 
 ---
 
-## 2. Clone the Project
+## ⚡ Quick Start
 
-Open a terminal on your host machine and run:
+Get the entire stack up and running locally in under 3 minutes:
 
 ```bash
-git clone <repository-url>
+# 1. Clone the repository
+git clone https://github.com/Pawan-19012006/Techonomy-Application.git
 cd techonomy
+
+# 2. Configure Backend Environment
+cp backend/.env.example backend/.env
+# (Edit backend/.env to paste your GEMINI_API_KEY or OPENROUTER_API_KEY)
+
+# 3. Setup Python Virtual Environment & Dependencies
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 4. Ingest Official Datasets
+PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type all
+
+# 5. Start Backend API Server (Terminal 1)
+PYTHONPATH=. .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 6. Setup & Start Frontend Development Server (Terminal 2)
+cd ../frontend
+npm install
+npm run dev
+```
+
+- **Frontend Application UI**: [http://localhost:5173](http://localhost:5173) (or [http://localhost:3000](http://localhost:3000))
+- **Backend API & Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **API Health Endpoint**: [http://localhost:8000/health](http://localhost:8000/health)
+
+---
+
+## 1. Features
+
+- **Instruction-Guided RAG**: Stage 1 queries internal instruction guidance to decompose questions before searching company evidence.
+- **Two-Stage Vector Retrieval**: Hard separation between `instruction_knowledge` (internal planning) and `company_knowledge` (user-visible evidence).
+- **Domain-Specific Query Expansion**: Dynamically expands broad concepts (`"profitability"`, `"working capital"`, `"sales"`) into targeted metric terms (`PAT`, `EBITDA`, `inventory days`, `receivable days`, `turnover`).
+- **Temporal Resolution Layer**: Resolves relative time phrases (`"last year"`, `"previous period"`, `"latest quarter"`, `"last month"`) against reporting period anchors in official company reports (`FY 2024-25`, `FY 2025-26`, `9M FY26`).
+- **Multi-Document Synthesis**: Combines evidence across multiple company reports (`1.pdf`, `3.pdf`, `7.pdf`, `DS01`, `DS04`, `DS08`) for comprehensive analytical coverage.
+- **Adaptive Response Depth**: Dynamically scales answer depth, reranker targets (`top_n = 5..12`), and context token ceilings (`2,000..4,500` tokens) based on question archetypes (`SIMPLE_FACTUAL`, `ANALYTICAL`, `COMPARATIVE`, `STRATEGIC_DIAGNOSTIC`).
+- **Evidence Coverage & Iterative Second-Pass Retrieval**: Inspects candidate evidence against required metrics; automatically executes targeted fallback queries if evidence is incomplete.
+- **Company-Only Source Citations**: Strictly attributes factual claims to company PDFs with exact page numbers (`3.pdf — Page 12`). Suppresses citations on explicit refusal answers.
+- **High-DPI PDF Document Viewer**: In-app PDF viewer rendered with `pdfjs-dist` supporting zoom, page jumping, and automatic smooth scrolling to exact cited page numbers.
+- **Quota-Aware Multi-Lane LLM Gateway**: 20-Lane Priority Scheduler with 10 Gemini primary lanes (`G01–G10`) and 10 OpenRouter/Nemotron fallback lanes (`N01–N10`) with automatic rate-limit failover.
+- **Team Management & Prompt Logging**: Per-team prompt usage tracking, quota enforcement, and persistent PostgreSQL audit logging.
+- **Admin Control Panel**: Operator dashboard for monitoring registered teams, session activity, query logs, and system metrics.
+
+---
+
+## 2. High-Level Architecture
+
+```text
+                           ┌───────────────────────────┐
+                           │    Participant / Admin    │
+                           └─────────────┬─────────────┘
+                                         │
+                                         ▼
+                           ┌───────────────────────────┐
+                           │   React 19 / Vite SPA     │
+                           └─────────────┬─────────────┘
+                                         │  (HTTP / SSE Stream)
+                                         ▼
+                           ┌───────────────────────────┐
+                           │   FastAPI Backend API     │
+                           └─────────────┬─────────────┘
+                                         │
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │ STAGE 1: INSTRUCTION GUIDANCE RAG     │
+                     │ (Collection: instruction_knowledge)   │
+                     └───────────────────┬───────────────────┘
+                                         │ Internal Guidance Chunks
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │         INSTRUCTION PLANNER           │
+                     │  • Query Archetype & Adaptive Depth   │
+                     │  • Temporal Resolution Engine        │
+                     │  • Concept & Synonym Expansion        │
+                     │  • Multi-Query Company Search Batch   │
+                     └───────────────────┬───────────────────┘
+                                         │ Multi-Query Batch
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │  STAGE 2: COMPANY EVIDENCE RETRIEVAL  │
+                     │  (Collection: company_knowledge ONLY) │
+                     │  • Strict Evidence Boundary Filter    │
+                     │  • Per-Doc Saturation Cap (Max 3/doc) │
+                     │  • Evidence Coverage Checker          │
+                     │  • Iterative Second-Pass Retrieval    │
+                     └───────────────────┬───────────────────┘
+                                         │ Raw Company Candidate Chunks
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │          ADAPTIVE RERANKER            │
+                     │  • Structured Financial Table Boost   │
+                     │  • Metric & Numerical Density Boost   │
+                     │  • Document Diversity Selection       │
+                     └───────────────────┬───────────────────┘
+                                         │ Top Reranked Matches (top_n = 5..12)
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │           CONTEXT BUILDER             │
+                     │  • Adaptive Ceiling (2,000..4,500T)   │
+                     └───────────────────┬───────────────────┘
+                                         │ Curated Context Package
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │        PROMPT BUILDER & GATEWAY       │
+                     │  • Response Guidance Directive        │
+                     │  • 20-Lane LLM Priority Scheduler     │
+                     └───────────────────┬───────────────────┘
+                                         │ Generated Response + Citations
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │        USER-FACING RESPONSE           │
+                     │  • Grounded Answer                    │
+                     │  • Company-Only Page Citations        │
+                     └───────────────────┬───────────────────┘
+                                         │ Citation Click (e.g. ?page=68)
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │      IN-APP PDF DOCUMENT VIEWER       │
+                     │  • High-DPI Canvas Rendering          │
+                     │  • Auto-Scroll to Exact Cited Page    │
+                     └───────────────────────────────────────┘
+```
+
+### Architecture Stage Breakdown
+
+1. **Stage 1 (Instruction Guidance RAG)**: Queries `instruction_knowledge` to retrieve internal analytical playbooks. This stage does NOT produce user-visible text.
+2. **Instruction Planning**: Parses temporal phrases (`"last year"` -> `FY 2024-25`), expands business concepts into metric terms, classifies the question archetype (`SIMPLE_FACTUAL`, `ANALYTICAL`, `COMPARATIVE`, `STRATEGIC_DIAGNOSTIC`), and builds a multi-query search batch.
+3. **Stage 2 (Company Evidence Retrieval)**: Executes multi-query vector searches strictly against `company_knowledge` (`document_type = "company"`, `visibility = "user_visible"`). Performs evidence coverage checking and triggers targeted fallback searches for missing metrics.
+4. **Adaptive Reranking & Context Assembly**: Reranks company candidates by boosting structured numerical tables, metric density, and document diversity. Assembles context within an adaptive token budget (up to 4,500 tokens).
+5. **LLM Generation & Gateway**: Routes the grounded prompt through the 20-Lane LLM Gateway (Gemini primary with OpenRouter failover).
+6. **Company-Only Citations & PDF Viewing**: Extracts company document page references (`3.pdf — Page 12`). Clicking a citation navigates to the PDF viewer and scrolls smoothly to the target page.
+
+---
+
+## 3. Dataset Separation
+
+The platform enforces strict separation between internal instructions and factual company evidence:
+
+| Dataset Category | Qdrant Collection | Document Type | Visibility | Permitted Usage | User Visibility |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Company Evidence** | `company_knowledge` | `company` | `user_visible` | Factual Evidence, LLM Context, Citations | **YES** (Search, List, View, Cite) |
+| **Instruction Guidance** | `instruction_knowledge` | `instruction` | `internal` | Stage 1 Query Decomposition & Strategy Planning | **NO** (Strictly Hidden & Prohibited) |
+
+### Security Boundary Enforcement
+
+1. **Vector Search Gate**: `RetrievalPipeline` applies `document_type = "company"` and `visibility = "user_visible"` filters to all Stage 2 searches. Any instruction chunk erroneously returned is dropped before reranking.
+2. **Prompt Context Isolation**: `PromptBuilder.format_context_chunks()` filters candidate chunks and formats ONLY company evidence.
+3. **Citation Extraction Isolation**: `ChatService._extract_sources()` ignores any source where `document_type != "company"`.
+4. **Server-Side API Guard**: `backend/app/api/documents.py` restricts file serving to `backend/data/documents/company/`. Requests attempting to access instruction filenames or perform path traversal return **HTTP 403 Forbidden** or **HTTP 400 Bad Request**.
+
+---
+
+## 4. Directory Structure
+
+```text
+techonomy/
+├── backend/
+│   ├── app/
+│   │   ├── api/                     # FastAPI route handlers (chat, documents, teams, admin)
+│   │   ├── database/                # SQLAlchemy database engine, models, and sessions
+│   │   ├── knowledge/               # Core Knowledge & RAG Architecture
+│   │   │   ├── exceptions.py        # Knowledge domain exceptions
+│   │   │   ├── indexing/            # Document chunking, embedding, vector DB client
+│   │   │   ├── ingestion/           # PDF text extraction and ingestion pipeline
+│   │   │   ├── models/              # SearchResult, RetrievalResult, RetrievalPlan
+│   │   │   ├── optimization/        # Token estimator and caching modules
+│   │   │   ├── rag/                 # ChatService, PromptBuilder, LLMGateway, AnswerCache
+│   │   │   └── retrieval/           # RetrievalPipeline, InstructionPlanner, Reranker,
+│   │   │                            # TemporalResolver, ConceptExpander, EvidenceChecker
+│   │   ├── middleware/              # Logging, CORS, and Exception Handler middlewares
+│   │   ├── prompts/                 # System prompt templates (system_prompt.txt)
+│   │   ├── schemas/                 # Pydantic request/response schemas
+│   │   ├── utils/                   # Logging and utility functions
+│   │   ├── config.py                # Central Pydantic settings
+│   │   └── main.py                  # FastAPI entrypoint & lifespan pre-warming
+│   ├── data/
+│   │   └── documents/
+│   │       ├── company/             # OFFICIAL COMPANY PDFS (User-Visible Evidence)
+│   │       └── instructions/        # INTERNAL INSTRUCTION PDFS (Internal Guidance Only)
+│   ├── qdrant_storage/              # Local Qdrant persistent file storage fallback
+│   ├── scripts/                     # Ingestion, diagnostic, and administrative scripts
+│   │   ├── ingest_datasets.py       # Main Dataset Ingestion & Reset CLI
+│   │   ├── inspect_qdrant_collections.py
+│   │   ├── test_live_financial_answer.py
+│   │   └── test_live_adaptive_depth.py
+│   ├── tests/                       # Comprehensive Pytest test suite
+│   │   ├── test_instruction_rag_isolation.py  # 7-Test Isolation Suite
+│   │   ├── test_advanced_rag_matrix.py        # 7-Test Analytical Matrix Suite
+│   │   ├── test_adaptive_response_depth.py    # 7-Test Adaptive Depth Suite
+│   │   ├── test_document_serving_security.py  # 5-Test Document Access Security Suite
+│   │   └── test_real_providers.py             # 6-Test LLM Gateway & Provider Suite
+│   ├── .env.example                 # Backend environment variable template
+│   ├── Dockerfile                   # Production Python backend Docker container
+│   ├── pyproject.toml               # Python project configuration
+│   └── requirements.txt             # Backend Python dependencies
+├── frontend/
+│   ├── src/
+│   │   ├── api/                     # Axios client configuration
+│   │   ├── components/              # UI components (chat, layout, skeletons)
+│   │   ├── contexts/                # AuthContext and ThemeContext
+│   │   ├── hooks/                   # React Query custom hooks (useDocuments, useChat)
+│   │   ├── pages/                   # App Pages (Dashboard, Documents, DocumentViewer, Admin)
+│   │   ├── services/                # API service functions (REST & SSE streaming)
+│   │   ├── types/                   # TypeScript interfaces
+│   │   ├── App.tsx                  # React Router routes definition
+│   │   └── main.tsx                 # React DOM entrypoint
+│   ├── public/                      # Static public web assets
+│   ├── .env.example                 # Frontend environment variable template
+│   ├── package.json                 # Frontend Node dependencies and scripts
+│   ├── tsconfig.json                # TypeScript compiler configuration
+│   └── vite.config.ts               # Vite bundler configuration
+├── docker-compose.yml               # Multi-service Docker orchestration
+├── .gitignore                       # Git exclusion rules
+└── README.md                        # Master Repository Documentation
 ```
 
 ---
 
-## 3. Environment Configuration
+## 5. Requirements & Prerequisites
 
-All application configuration is managed via `backend/.env`.
+### System Requirements
 
-### Step 1: Copy the Canonical Template
+- **Python**: `3.13` (or `3.10+`)
+- **Node.js**: `v20.x` or higher
+- **npm**: `v10.x` or higher
+- **Relational Database**: PostgreSQL (Supabase Cloud recommended; SQLite `sqlite:///./techonomy.db` supported for local development)
+- **Vector Database**: Qdrant Cloud cluster (or local filesystem storage fallback `./qdrant_storage`)
+- **LLM API Keys**: At least 1 valid Google Gemini API key or OpenRouter API key
 
-Run the following command from the repository root:
+---
+
+## 6. Environment Variables
+
+All configuration settings are managed via environment variables.
+
+### Backend Environment Variables (`backend/.env`)
+
+| Variable | Purpose | Required? | Default / Example Value |
+| :--- | :--- | :---: | :--- |
+| `PROJECT_NAME` | Name of the platform application | Optional | `"Techonomy Knowledge Intelligence Platform"` |
+| `VERSION` | Backend API version string | Optional | `1.0.0` |
+| `DEBUG` | Enables verbose debug logging | Optional | `False` |
+| `HOST` | Backend server bind address | Optional | `0.0.0.0` |
+| `PORT` | Backend server bind port | Optional | `8000` |
+| `JWT_SECRET` | Secret key for signing JWT tokens | **REQUIRED** | `replace_with_a_secure_random_key` |
+| `CORS_ORIGINS` | Allowed CORS origins (comma-separated) | Optional | `http://localhost:5173,http://localhost:3000` |
+| `QUESTION_LIMIT` | Event prompt limit per team | Optional | `10` |
+| `DATABASE_URL` | PostgreSQL or SQLite connection string | **REQUIRED** | `postgresql://user:pass@host:5432/db` |
+| `QDRANT_URL` | Qdrant Cloud cluster URL | Optional | `https://your-cluster-id.qdrant.tech` |
+| `QDRANT_API_KEY` | Qdrant Cloud API Key | Optional | `your_qdrant_api_key_here` |
+| `QDRANT_COMPANY_COLLECTION_NAME` | Target collection for company evidence | Optional | `company_knowledge` |
+| `QDRANT_INSTRUCTION_COLLECTION_NAME` | Target collection for instructions | Optional | `instruction_knowledge` |
+| `EMBEDDING_MODEL_NAME` | HuggingFace embedding model | Optional | `BAAI/bge-small-en-v1.5` |
+| `GEMINI_API_KEY` | Primary Gemini API Key | **REQUIRED** | `your_gemini_api_key_here` |
+| `GEMINI_API_KEY_1`..`10` | Multi-lane Gemini API Keys (G01–G10) | Optional | `your_gemini_key_1` |
+| `GEMINI_MODEL` | Target Gemini model identifier | Optional | `gemini-flash-lite-latest` |
+| `OPENROUTER_API_KEY` | Fallback OpenRouter API Key | Optional | `your_openrouter_api_key_here` |
+| `OPENROUTER_API_KEY_1`..`10` | Multi-lane OpenRouter Keys (N01–N10) | Optional | `your_openrouter_key_1` |
+| `OPENROUTER_MODEL` | Target OpenRouter fallback model | Optional | `nvidia/nemotron-3.5-lightning:free` |
+| `RETRIEVAL_TOP_K` | Vector search top K candidates | Optional | `10` |
+| `RETRIEVAL_RERANK_TOP_N` | Reranker output target | Optional | `5` |
+| `RETRIEVAL_CONTEXT_TOKEN_BUDGET` | Base context token ceiling | Optional | `2000` |
+
+### Frontend Environment Variables (`frontend/.env`)
+
+| Variable | Purpose | Required? | Default / Example Value |
+| :--- | :--- | :---: | :--- |
+| `VITE_API_BASE_URL` | Backend API URL for standalone frontend dev | Optional | `http://127.0.0.1:8000` (Leave empty in production) |
+
+---
+
+## 7. First-Time Setup
+
+Follow these steps for a complete local setup from scratch:
+
+### 1. Environment File Creation
 
 ```bash
+# Copy Backend Environment Template
 cp backend/.env.example backend/.env
+
+# Copy Frontend Environment Template
+cp frontend/.env.example frontend/.env
+```
+
+Open `backend/.env` and paste your API keys:
+```env
+GEMINI_API_KEY=AIzaSy...
+```
+
+### 2. Backend Setup
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 3. Frontend Setup
+
+```bash
+cd ../frontend
+npm install
+```
+
+---
+
+## 8. Dataset Ingestion
+
+The repository uses `backend/scripts/ingest_datasets.py` to manage vector indexing and resets for both datasets.
+
+### Step 1: Add PDF Files
+
+Place official PDF documents into their respective directories:
+- **Company Evidence PDFs** -> `backend/data/documents/company/`
+  - Example: `1.pdf`, `2.pdf`, `3.pdf`, `4.pdf`, `6 - revised.pdf`, `7.pdf`, `DS01_Consumer_Sales_Transactions.pdf`, `DS08_Finance_Commercial_Economics.pdf`
+- **Internal Instruction PDFs** -> `backend/data/documents/instructions/`
+  - Example: `Company_Blueprint.pdf`, `Marketing_Strategy_Playbook.pdf`, `Strategy_Evidence_Data_Architecture.pdf`
+
+### Step 2: Run Ingestion Commands
+
+Execute ingestion from the `backend/` directory with the virtual environment activated:
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Ingest BOTH datasets (Company + Instructions)
+PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type all
+
+# Ingest ONLY Company Evidence PDFs
+PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type company
+
+# Ingest ONLY Instruction Guidance PDFs
+PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type instruction
+```
+
+### Step 3: Independent Collection Resets
+
+You can reset either dataset independently without affecting the other:
+
+```bash
+# Reset ONLY Company Knowledge collection (company_knowledge)
+PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type reset-company
+
+# Reset ONLY Instruction Knowledge collection (instruction_knowledge)
+PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type reset-instruction
 ```
 
 > [!CAUTION]
-> **NEVER commit `backend/.env` to Git.** It contains sensitive API keys and database credentials.
+> **NEVER mix instruction PDFs into `backend/data/documents/company/`.** Placing instruction files in the company directory will pollute participant evidence and expose internal playbooks in citations.
 
-### Step 2: Configure Environment Variables
+---
 
-Edit `backend/.env` using any standard text editor. Below is a breakdown of all required configuration categories:
+## 9. Qdrant Vector Database
 
-#### A. Application & Server Configuration
-```env
-PROJECT_NAME="Techonomy Knowledge Intelligence Platform"
-VERSION=1.0.0
-DEBUG=False
-HOST=0.0.0.0
-PORT=8000
-JWT_SECRET=replace_with_a_secure_random_jwt_secret_key_here
-JWT_ALGORITHM=HS256
-CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-```
+The application manages two isolated Qdrant vector collections:
 
-#### B. Event & Team Quota Configuration
-```env
-QUESTION_LIMIT=10
-```
-- `QUESTION_LIMIT`: Maximum allowed query limit per team across the entire event.
+| Property | `company_knowledge` | `instruction_knowledge` |
+| :--- | :--- | :--- |
+| **Vector Dimension** | `384` (`BAAI/bge-small-en-v1.5`) | `384` (`BAAI/bge-small-en-v1.5`) |
+| **Distance Metric** | `Cosine` | `Cosine` |
+| **Target Document Type** | `company` | `instruction` |
+| **Target Visibility** | `user_visible` | `internal` |
+| **Ingested Documents** | 15 Company Reports & Data Sheets | 15 Internal Playbooks & Guides |
+| **Point Count (Ingested)** | ~274 Vectors | ~107 Vectors |
 
-#### C. Persistent Database Configuration
-```env
-DATABASE_URL=postgresql://techonomy:techonomy_pass@postgres:5432/techonomy_db
-```
-- Default uses the local PostgreSQL Docker container.
-- For Cloud PostgreSQL (Supabase), replace with your Supabase pooler connection string:
-  `postgresql://user:password@aws-0-region.pooler.supabase.com:5432/postgres?sslmode=require`
+### Storage Fallback Mode
 
-#### D. Vector Database Configuration (Qdrant Cloud)
-```env
-QDRANT_URL=https://your-cluster-id.qdrant.tech
-QDRANT_API_KEY=your_qdrant_cloud_api_key_here
-QDRANT_HOST=qdrant
-QDRANT_PORT=6333
-QDRANT_COLLECTION_NAME=company_knowledge
-```
-- When `QDRANT_URL` and `QDRANT_API_KEY` are provided, Techonomy connects directly to your Qdrant Cloud cluster. If left empty, it falls back to the local `qdrant` container.
+- **Qdrant Cloud Mode**: Set `QDRANT_URL` and `QDRANT_API_KEY` in `backend/.env`.
+- **Local Filesystem Fallback**: If `QDRANT_URL` is omitted or empty, Qdrant operates in embedded local storage mode persisting vector files to `./backend/qdrant_storage/`.
 
-#### E. 20 LLM Provider API Keys (10 Gemini + 10 OpenRouter / Nemotron)
-```env
-# Primary LLM Keys (Gemini 2.0 Flash)
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_API_KEY_1=your_gemini_key_1
-GEMINI_API_KEY_2=your_gemini_key_2
-GEMINI_API_KEY_3=your_gemini_key_3
-GEMINI_API_KEY_4=your_gemini_key_4
-GEMINI_API_KEY_5=your_gemini_key_5
-GEMINI_API_KEY_6=your_gemini_key_6
-GEMINI_API_KEY_7=your_gemini_key_7
-GEMINI_API_KEY_8=your_gemini_key_8
-GEMINI_API_KEY_9=your_gemini_key_9
-GEMINI_API_KEY_10=your_gemini_key_10
-GEMINI_MODEL=gemini-flash-lite-latest
+### Inspect Vector Collections
 
-# Fallback LLM Keys (OpenRouter / Nemotron 3.5)
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENROUTER_API_KEY_1=your_openrouter_key_1
-OPENROUTER_API_KEY_2=your_openrouter_key_2
-OPENROUTER_API_KEY_3=your_openrouter_key_3
-OPENROUTER_API_KEY_4=your_openrouter_key_4
-OPENROUTER_API_KEY_5=your_openrouter_key_5
-OPENROUTER_API_KEY_6=your_openrouter_key_6
-OPENROUTER_API_KEY_7=your_openrouter_key_7
-OPENROUTER_API_KEY_8=your_openrouter_key_8
-OPENROUTER_API_KEY_9=your_openrouter_key_9
-OPENROUTER_API_KEY_10=your_openrouter_key_10
-OPENROUTER_MODEL=nvidia/nemotron-3.5-lightning:free
-MODEL_NAME=nvidia/nemotron-3.5-lightning:free
-```
-- **Provider Routing**: The scheduler routes queries across Gemini primary lanes (`G01–G10`). If Gemini lanes enter rate-limiting or exhaust capacity, queries automatically failover to OpenRouter / Nemotron fallback lanes (`N01–N10`).
-
-#### F. Embedding & Retrieval Configuration
-```env
-EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
-RETRIEVAL_TOP_K=10
-TOP_K=10
+```bash
+cd backend
+PYTHONPATH=. .venv/bin/python scripts/inspect_qdrant_collections.py
 ```
 
 ---
 
-## 4. Docker Startup
+## 10. Database Architecture & Persistence
 
-Start the complete application stack with a single command from the repository root:
+Techonomy uses SQLAlchemy with support for PostgreSQL (Supabase Cloud) and SQLite (`sqlite:///./techonomy.db`).
+
+### Persistent Database Tables
+
+1. **`teams`**:
+   - `team_name` (PK, String): Unique team name identifier.
+   - `member_names` (JSON): Array of team member names.
+   - `started_at` (DateTime): Team registration timestamp.
+2. **`prompt_logs`**:
+   - `id` (PK, Integer): Log identifier.
+   - `team_name` (FK): Foreign key to `teams.team_name`.
+   - `prompt` (Text): User query string.
+   - `response` (Text): Generated RAG answer.
+   - `sources` (JSON): Citation sources array (`[{document: "3.pdf", page: 12}]`).
+   - `created_at` (DateTime): Query timestamp.
+3. **`llm_lanes`**:
+   - Tracks operational status, request counts, error counts, and cooldown timestamps for all 20 LLM Gateway lanes (`G01–G10` and `N01–N10`).
+4. **`team_quotas`**:
+   - `team_name` (FK), `questions_used`, `question_limit` (Default: 10).
+
+Database tables are initialized automatically on server boot via `init_db()`.
+
+---
+
+## 11. Running the Application
+
+### Local Development (Dual Terminals)
+
+#### Terminal 1: Backend API Server
+```bash
+cd backend
+source .venv/bin/activate
+PYTHONPATH=. .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### Terminal 2: Frontend Vite Development Server
+```bash
+cd frontend
+npm run dev
+```
+
+- Access Frontend: [http://localhost:5173](http://localhost:5173)
+- Access Backend API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Docker Production Deployment (Single Port `8000`)
+
+To build and run the full stack (Frontend SPA + Backend API) inside a single container on port `8000`:
 
 ```bash
 docker compose up --build -d
 ```
 
-### What Docker Does Automatically:
-1. **Stage 1 (Frontend)**: Compiles the React 19 static production build inside a Node 20 container.
-2. **Stage 2 (Backend)**: Pre-installs CPU-only PyTorch and Python backend dependencies.
-3. **Database & Storage**: Launches local PostgreSQL and local Qdrant containers (if fallbacks are used).
-4. **FastAPI Server**: Copies frontend static build artifacts to `/app/frontend/dist` and starts Uvicorn on port `8000`.
-5. **Model Initialization**: Downloads the `BAAI/bge-small-en-v1.5` model (~133 MB) into a persistent Docker volume (`hf_cache`).
-
-> [!NOTE]
-> The initial `docker compose up --build` command may take 2–4 minutes depending on your internet speed as Docker pulls container base images and downloads the embedding model. Subsequent startups complete in seconds.
+Access the application at [http://localhost:8000](http://localhost:8000).
 
 ---
 
-## 5. Verify Startup
+## 12. API Reference
 
-### Check Container Status
-```bash
-docker compose ps
-```
-All containers (`techonomy_backend`, `techonomy_postgres`, `techonomy_qdrant`) should show status `Up` or `healthy`.
+### Core Endpoints
 
-### Inspect Backend Logs
-```bash
-docker compose logs backend --tail=50
-```
-
-### Verify System Health Endpoint
-Run this command from your terminal:
-
-```bash
-curl http://localhost:8000/health
-```
-
-**Expected JSON Response:**
-```json
-{
-  "status": "healthy",
-  "database": "connected",
-  "qdrant": "connected",
-  "embedding_model": "loaded"
-}
-```
-
-### Check System Metrics & Status
-```bash
-curl http://localhost:8000/api/status
-```
-
-> [!TIP]
-> If `embedding_model` displays `"loading"`, wait 30 seconds for Hugging Face model initialization to complete.
+| Method | Endpoint | Description | Auth Required? |
+| :--- | :--- | :--- | :---: |
+| `GET` | `/health` | Application, DB, Qdrant, and Model health probe | No |
+| `GET` | `/api/status` | Backend API status string | No |
+| `POST` | `/api/teams/join` | Register or join an event team | No |
+| `GET` | `/api/teams/{team_name}` | Get team status, members, and quota | No |
+| `GET` | `/api/teams/{team_name}/prompts` | Get prompt execution history for a team | No |
+| `POST` | `/api/chat` | Submit RAG query (Synchronous REST) | No |
+| `POST` | `/api/chat/stream` | Submit RAG query (SSE Token Streaming) | No |
+| `GET` | `/api/documents` | List available official **company** documents | No |
+| `GET` | `/api/documents/{id}` | Get metadata for a company document | No |
+| `GET` | `/api/documents/{id}/file` | Stream raw company PDF file for document viewer | No |
+| `POST` | `/api/admin/login` | Event organizer authentication | Admin |
+| `GET` | `/api/admin/overview` | Admin dashboard event metrics | Admin Token |
+| `GET` | `/api/admin/teams` | Admin list of all registered teams | Admin Token |
+| `GET` | `/api/admin/teams/{team_name}` | Admin team detail & prompt history | Admin Token |
 
 ---
 
-## 6. Event PDF / Knowledge Base Setup
-
-> [!IMPORTANT]
-> The repository includes sample mock PDFs in `backend/data/documents/`. **Do NOT use sample PDFs for the actual event.**
-
-### Why Normal Ingestion Must NOT Be Repeated Without Reset
-Techonomy chunks PDF content and assigns unique `uuid4` identifiers to each vector payload. Simply copying new files and re-running ingestion without clearing Qdrant creates duplicate chunks and causes vector retrieval pollution.
-
-### Safe Event Knowledge Base Replacement Workflow
-
-1. **Clean Host Data Directory**:
-   Remove mock PDFs from `backend/data/documents/`:
-   ```bash
-   rm -f backend/data/documents/*.pdf
-   ```
-
-2. **Add Real Event PDFs**:
-   Copy your official event PDF files into `backend/data/documents/`:
-   ```bash
-   cp /path/to/your/event_handbook.pdf backend/data/documents/
-   ```
-
-3. **Execute Event Knowledge Reset**:
-   Run the safe event reset CLI script inside the running backend container:
-   ```bash
-   docker compose exec -it backend python scripts/reset_event.py
-   ```
-
-4. **Review Confirmation Prompt**:
-   The script scans `backend/data/documents/`, displays discovered PDFs, and asks for confirmation:
-   ```text
-   ==================================================
-   TECHONOMY KNOWLEDGE BASE RESET
-   ==================================================
-
-   This operation will DELETE the existing Qdrant collection:
-   company_knowledge
-
-   PDF files found:
-     1. event_handbook.pdf
-
-   Continue? [y/N]: y
-   ```
-   Type `y` and press **Enter**.
-
-   *For non-interactive execution (e.g. automated scripts)*:
-   ```bash
-   docker compose exec backend python scripts/reset_event.py --yes
-   ```
-
-5. **Script Execution Actions**:
-   - Recreates the Qdrant `company_knowledge` collection (384 dimensions, Cosine distance).
-   - Extracts text and structure using PyMuPDF.
-   - Chunks content with `SemanticChunker` (512 max tokens, 50 overlap).
-   - Generates normalized BGE embeddings.
-   - Uploads vectors to Qdrant Cloud.
-   - Executes post-ingestion verification confirming vector count and indexed document names.
-
----
-
-## 7. Knowledge Base Verification
-
-Verify that only official event documents exist in your vector database:
-
-```bash
-docker compose exec backend python scripts/debug_qdrant.py
-```
-
-**Expected Output:**
-```text
-================================================================================
- 🛠️ TECHONOMY QDRANT VECTOR DATABASE DEBUG UTILITY
-================================================================================
- • Collection Name:         company_knowledge
- • Total Vector Points:     127
---------------------------------------------------------------------------------
-
- 📄 INDEXED DOCUMENTS IN COLLECTION:
-   [ 1] event_handbook.pdf
-
-================================================================================
-```
-
-Ensure:
-- `Total Vector Points` is greater than 0.
-- Only your official event PDF filenames appear under `INDEXED DOCUMENTS`.
-
----
-
-## 8. Starting ngrok
-
-Techonomy serves both the React user interface and FastAPI endpoints through a single port (`8000`).
-
-To expose the application to the internet, run ngrok on your host machine:
-
-```bash
-ngrok http 8000
-```
-
-**Terminal Output:**
-```text
-Session Status                online
-Account                       Event Operator (Plan: Free)
-Forwarding                    https://a1b2-c3d4-e5f6.ngrok-free.dev -> http://localhost:8000
-```
-
-Copy the generated **HTTPS URL** (e.g., `https://a1b2-c3d4-e5f6.ngrok-free.dev`). This is the **ONLY** URL required for the entire event.
-
----
-
-## 9. Remote Device / Network Independence
-
-- **Participant Experience**: Participants open the single HTTPS ngrok URL on their smartphones, laptops, or tablets.
-- **Network Agnostic**: Participants can be connected to cellular hotspots, college Wi-Fi, home networks, or separate ISPs.
-- **Zero Client Setup**: Participants do **NOT** need Docker, Python, backend access, or API keys.
-- **Host Laptop Requirements**: The hosting operator laptop must remain:
-  1. Powered on and awake (disable sleep mode).
-  2. Connected to an active internet connection.
-  3. Running Docker Desktop and the `backend` container.
-  4. Running the `ngrok http 8000` process.
-
----
-
-## 10. Event-Day Quick Start Checklist
-
-Copy and execute these steps on event day:
-
-```bash
-# 1. Clone & enter repository
-git clone <repository_url>
-cd techonomy
-
-# 2. Setup environment credentials
-cp backend/.env.example backend/.env
-# EDIT backend/.env with API keys & Qdrant Cloud credentials
-
-# 3. Launch Docker stack
-docker compose up --build -d
-
-# 4. Check backend status
-curl http://localhost:8000/health
-
-# 5. Load real event PDFs
-rm -f backend/data/documents/*.pdf
-cp /path/to/official_event_docs/*.pdf backend/data/documents/
-
-# 6. Reset & ingest vector database
-docker compose exec -it backend python scripts/reset_event.py
-
-# 7. Verify vector database
-docker compose exec backend python scripts/debug_qdrant.py
-
-# 8. Start public HTTPS tunnel
-ngrok http 8000
-```
-
----
-
-## 11. Troubleshooting
-
-| Symptom / Error | Cause | Solution / Diagnostic Command |
-|---|---|---|
-| `docker: command not found` | Docker Desktop is not installed or not added to PATH. | Install Docker Desktop for macOS/Windows/Linux. |
-| `Cannot connect to Docker daemon` | Docker Desktop application is closed. | Launch Docker Desktop and wait until status shows "Engine Running". |
-| `backend` container status `unhealthy` | Embedding model download or DB connection pending. | Check logs: `docker compose logs backend --tail=100` |
-| Health check shows `"embedding_model": "loading"` | Hugging Face model download in progress. | Wait 30s and re-test: `curl http://localhost:8000/health` |
-| `qdrant_client.http.exceptions.UnexpectedResponse: 401` | Incorrect `QDRANT_API_KEY` or `QDRANT_URL`. | Verify cluster URL and API key in `backend/.env`. |
-| `psycopg2.OperationalError: Connection refused` | Database container initializing or invalid `DATABASE_URL`. | Test Postgres health: `docker compose exec postgres pg_isready -U techonomy -d techonomy_db` |
-| `No LLM API keys configured` | `GEMINI_API_KEY_1..10` and fallback keys empty in `.env`. | Open `backend/.env` and paste at least one valid Gemini or OpenRouter key. |
-| `reset_event.py` fails with `0 PDFs found` | `backend/data/documents/` has no `.pdf` files. | Copy event PDF files into `backend/data/documents/` before running script. |
-| `PyMuPDF` or PDF extraction error | Corrupted or password-protected PDF. | Re-save PDF without password protection or export as standard PDF/A. |
-| `ngrok: command not found` | ngrok CLI not installed. | Download ngrok from [ngrok.com](https://ngrok.com/download) or `brew install ngrok`. |
-| `ngrok` error `ERR_NGROK_4018` | Authtoken not configured on host machine. | Run `ngrok config add-authtoken <your-token>` |
-| Participants see `502 Bad Gateway` on ngrok | Docker container or backend process crashed. | Check backend logs: `docker compose logs backend --tail=50` |
-| Browser displays old UI layout | Browser cached static assets. | Perform hard refresh (`Cmd+Shift+R` or `Ctrl+F5`) in participant browser. |
-
----
-
-## 12. Stopping & Restarting
-
-### Stop Containers (Preserving Volumes & Data)
-```bash
-docker compose down
-```
-
-### Restart Containers
-```bash
-docker compose up -d
-```
-
-### Reset All Local Container Volumes (Full Fresh State)
-```bash
-docker compose down -v
-```
-
-> [!NOTE]
-> Restarting or stopping Docker containers does **NOT** delete vectors in your Qdrant Cloud database. Qdrant Cloud data persists until `scripts/reset_event.py` is explicitly executed.
-
----
-
-## 13. Security Warnings
-
-1. **Keep Secrets Private**: NEVER commit `backend/.env` or share `JWT_SECRET`, `QDRANT_API_KEY`, or LLM API keys.
-2. **No Keys in Frontend**: All API key rotation and LLM invocations occur strictly on the backend. No credentials exist in the React bundle.
-3. **Public Tunnel Awareness**: The ngrok HTTPS URL is accessible to anyone with the link. Keep host machine secure.
-4. **Destructive Reset Protection**: `scripts/reset_event.py` wipes the target collection before re-indexing. Only event operators should execute this script.
-
----
-
-## 14. Architecture Diagram
+## 13. How the RAG Works
 
 ```text
-  [ Participant Laptop / Phone ]
-               │
-               ▼ (Public Internet)
-    https://xxxx.ngrok-free.dev
-               │
-               ▼ (ngrok Tunnel Ingress)
-     [ Host Laptop : Port 8000 ]
-               │
-               ▼
-     ┌────────────────────────────────────────────────────────┐
-     │                FastAPI Application Container           │
-     │                                                        │
-     │  ┌────────────────────────┐  ┌──────────────────────┐  │
-     │  │  React 19 SPA Static   │  │  /api/* REST & SSE   │  │
-     │  │  Distribution Asset    │  │  Streaming Handlers  │  │
-     │  └────────────────────────┘  └──────────┬───────────┘  │
-     │                                         │              │
-     │  ┌────────────────────────┐  ┌──────────▼───────────┐  │
-     │  │ BGE-Small Embedding    │  │ 20-Lane Priority     │  │
-     │  │ Model (CPU PyTorch)    │  │ LLM Quota Scheduler  │  │
-     │  └───────────┬────────────┘  └──────────┬───────────┘  │
-     └──────────────┼──────────────────────────┼──────────────┘
-                    │                          │
-        ┌───────────▼───────────┐  ┌───────────▼───────────┐
-        │  Qdrant Cloud Cluster │  │  PostgreSQL Database  │
-        │  (384-Dim Vector DB)  │  │  (Team Quota Records) │
-        └───────────────────────┘  └───────────────────────┘
+User Question ──► Stage 1 (Instruction RAG) ──► Planner ──► Stage 2 (Company RAG) ──► Reranker ──► PromptBuilder ──► LLM ──► Grounded Response
+```
+
+### Stage 1: Instruction Guidance & Planning
+1. Queries `instruction_knowledge` (`top_k=4`, `minimum_similarity=0.15`).
+2. `InstructionPlanner` extracts guidance terms and passes the query through `TemporalResolver` and `ConceptExpander`.
+3. Constructs a structured `RetrievalPlan` containing:
+   - `question_archetype` (`SIMPLE_FACTUAL`, `ANALYTICAL`, `COMPARATIVE`, `STRATEGIC_DIAGNOSTIC`)
+   - `response_depth_target` (`CONCISE`, `DETAILED_ANALYSIS`, `STRUCTURED_COMPARISON`, `MULTI_SECTION_DEEP_DIVE`)
+   - `adaptive_token_budget` (`2,000` to `4,500` tokens)
+   - `target_top_n` (`5` to `12` reranked chunks)
+   - Multi-query search batch (temporal queries + expanded concept queries)
+
+### Stage 2: Company Evidence Retrieval & Reranking
+1. Executes vector searches strictly in `company_knowledge` (`document_type = "company"`, `visibility = "user_visible"`).
+2. Deduplicates candidates and caps saturation at max 3 chunks per document.
+3. `EvidenceChecker` evaluates coverage against required metrics. If evidence is incomplete, it executes **targeted second-pass fallback queries**.
+4. `Reranker` applies table structure boosts (+0.18 for financial tables), numerical density scoring, and document diversity selection.
+5. `ContextBuilder` synthesizes context blocks within the adaptive token ceiling.
+
+### LLM Answer Generation
+1. Injects `RESPONSE GUIDANCE DIRECTIVE` to ensure answer depth matches information complexity rather than prompt length.
+2. The LLM generates a structured response using numbers and facts strictly from company context.
+3. `ChatService` extracts company citations (`3.pdf — Page 12`) and suppresses citations if the response is an explicit refusal.
+
+---
+
+## 14. Citations and Document Viewing
+
+1. **Citation Card Format**: Kairos responses display citations for company documents used (`3.pdf — Page 12`).
+2. **Exact Page Jump**: Clicking a citation card navigates to `/documents/3.pdf?page=12` (or `/admin/documents/3.pdf?page=12`).
+3. **In-App PDF Viewer**:
+   - Renders PDF pages using `pdfjs-dist` on high-DPI HTML5 canvases.
+   - Reactively reads `searchParams.get('page')` and automatically scrolls smoothly to `pdf-page-12`.
+   - Displays a `CITATION SOURCE` badge on the target page.
+4. **Security Isolation**: If a user attempts to manually request an instruction PDF (e.g., `/documents/Financial_Analysis_Instruction.pdf`), the backend blocks access with **HTTP 403 Forbidden**.
+
+---
+
+## 15. Security & Visibility Model
+
+The system implements multi-layer defense-in-depth:
+
+```text
+               ┌─────────────────────────────────────────┐
+               │          User Request Ingress           │
+               └────────────────────┬────────────────────┘
+                                    │
+                                    ▼
+               ┌─────────────────────────────────────────┐
+               │    Backend API Security Guard           │
+               │    (find_document_file)                 │
+               │    • Path Traversal Check (HTTP 400)    │
+               │    • Instruction Check (HTTP 403)       │
+               │    • Company Dir Scoping (HTTP 404)     │
+               └────────────────────┬────────────────────┘
+                                    │ Authorized Company File
+                                    ▼
+               ┌─────────────────────────────────────────┐
+               │   Vector Search & RAG Isolation         │
+               │   • document_type = "company"           │
+               │   • visibility = "user_visible"         │
+               │   • Instruction Chunks Dropped          │
+               └────────────────────┬────────────────────┘
+                                    │ Factual Company Evidence
+                                    ▼
+               ┌─────────────────────────────────────────┐
+               │         Client Citation Navigation      │
+               │         • Company PDFs Only             │
+               │         • Exact Page Jump Navigation    │
+               └─────────────────────────────────────────┘
 ```
 
 ---
 
-## 15. Important Operator Rules
+## 16. Testing
 
-1. **Keep Docker Running**: Keep Docker Desktop active throughout the event.
-2. **Keep ngrok Running**: Keep the terminal running `ngrok http 8000` open.
-3. **Keep Internet Active**: Ensure the host laptop maintains an active internet connection.
-4. **Do Not Share Keys**: Keep `backend/.env` secure.
-5. **Always Reset On PDF Change**: Do not copy new PDFs into `data/documents/` without running `scripts/reset_event.py`.
-6. **Verify Qdrant**: Run `scripts/debug_qdrant.py` after indexing to confirm vector count and document names.
-7. **Do Not Change Embedding Models**: Keep `EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5` consistent across ingestion and retrieval.
-8. **Participants Only Need the Link**: Participants do not require backend setups or local tools.
+The repository contains a comprehensive suite of automated tests.
+
+### Run All Backend Tests
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Run full backend test suite
+PYTHONPATH=. .venv/bin/python -m pytest -v
+```
+
+### Individual Test Suites
+
+```bash
+# 1. Dataset Isolation Test Suite (7 Tests)
+PYTHONPATH=. .venv/bin/python -m pytest tests/test_instruction_rag_isolation.py -v
+
+# 2. Advanced RAG Matrix Test Suite (7 Tests)
+PYTHONPATH=. .venv/bin/python -m pytest tests/test_advanced_rag_matrix.py -v
+
+# 3. Adaptive Response Depth Test Suite (7 Tests)
+PYTHONPATH=. .venv/bin/python -m pytest tests/test_adaptive_response_depth.py -v
+
+# 4. Document Access Security Test Suite (5 Tests)
+PYTHONPATH=. .venv/bin/python -m pytest tests/test_document_serving_security.py -v
+
+# 5. LLM Gateway & Real Provider Test Suite (6 Tests)
+PYTHONPATH=. .venv/bin/python -m pytest tests/test_real_providers.py -v
+```
+
+All 32 test cases across the suites verify 100% pass rates.
+
+---
+
+## 17. Frontend Production Build
+
+Validate TypeScript compilation and build the static distribution bundle:
+
+```bash
+cd frontend
+npm run build
+```
+
+- **Build Output**: Saved to `frontend/dist/`.
+- **Validation**: Ensures zero TypeScript compilation or bundler errors.
+
+---
+
+## 18. Troubleshooting
+
+### `ModuleNotFoundError: No module named 'app'`
+- **Cause**: Python command executed without setting `PYTHONPATH`.
+- **Fix**: Run commands from `backend/` directory with `PYTHONPATH=.`:
+  ```bash
+  cd backend
+  PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type all
+  ```
+
+### `ValueError: Collection company_knowledge not found`
+- **Cause**: Qdrant collections have not been initialized or ingested.
+- **Fix**: Run dataset ingestion script:
+  ```bash
+  PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type all
+  ```
+
+### `403 Forbidden` on Document Viewer
+- **Cause**: Attempted to access an internal instruction document or path traversal.
+- **Fix**: Verify that the document requested is located in `backend/data/documents/company/` and is marked `visibility = "user_visible"`.
+
+### Frontend Cannot Reach Backend API
+- **Cause**: Backend server is not running on port 8000 or CORS origin is blocked.
+- **Fix**: Ensure Uvicorn is running on `http://127.0.0.1:8000` and check `CORS_ORIGINS` in `backend/.env`.
+
+---
+
+## 19. Development Workflow
+
+1. **Clone Branch**: `git clone https://github.com/Pawan-19012006/Techonomy-Application.git`
+2. **Environment**: Copy `.env.example` to `.env` in `backend/` and `frontend/`.
+3. **Backend Setup**: Create `.venv`, run `pip install -r requirements.txt`.
+4. **Frontend Setup**: Run `npm install` inside `frontend/`.
+5. **Populate Datasets**: Add company PDFs to `backend/data/documents/company/` and instruction PDFs to `backend/data/documents/instructions/`.
+6. **Ingest Data**: Run `PYTHONPATH=. .venv/bin/python scripts/ingest_datasets.py --type all`.
+7. **Start Backend**: Run Uvicorn on port 8000.
+8. **Start Frontend**: Run `npm run dev`.
+9. **Run Tests**: Execute `PYTHONPATH=. .venv/bin/python -m pytest -v`.
+
+---
+
+## 20. Important Developer Rules
+
+1. **Instruction Documents Are Strictly Internal**: Never modify code to expose `instruction_knowledge` chunks or filenames to users or frontend components.
+2. **Company Documents Are Sole Factual Evidence**: Never use instruction documents as factual evidence in LLM answers or citations.
+3. **Preserve Dataset Isolation**: Keep `company_knowledge` and `instruction_knowledge` Qdrant collections completely isolated.
+4. **Server-Side Security First**: Document access authorization MUST be enforced in `backend/app/api/documents.py`, never relying solely on frontend UI filtering.
+5. **Preserve Citation Page Parameters**: Ensure exact page numbers (`?page=N`) are passed from search results to citation cards and viewer components.
+6. **Do Not Alter RAG Analytical Architecture**: Keep `InstructionPlanner`, `RetrievalPipeline`, `Reranker`, and `PromptBuilder` working in sync.
+7. **Always Run Isolation Tests**: Execute `pytest tests/test_instruction_rag_isolation.py` after modifying any retrieval or indexing logic.
+
+---
+
+## 21. Version Information
+
+- **Platform**: Techonomy / Kairos Knowledge Intelligence Platform
+- **Version**: `v1.0.0`
+- **Architecture**: Two-Stage Instruction-Guided RAG with Adaptive Response Depth
