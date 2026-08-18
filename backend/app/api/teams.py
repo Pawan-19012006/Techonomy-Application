@@ -27,10 +27,14 @@ async def join_team(
         team_name=payload.team_name,
         member_names=payload.member_names,
     )
+    remaining = TeamService.get_timer_remaining_seconds(team.started_at)
     return TeamResponse(
         team_name=team.team_name,
         member_names=team.member_names,
         started_at=team.started_at,
+        timer_remaining_seconds=remaining,
+        session_duration_seconds=9000,
+        is_expired=remaining <= 0,
     )
 
 
@@ -39,17 +43,21 @@ async def get_team(
     team_name: str,
     db: Annotated[Session, Depends(get_db)],
 ) -> TeamResponse:
-    """Retrieves team information including member names and started_at timestamp."""
+    """Retrieves team information including member names, started_at timestamp, and session timer."""
     team = TeamService.get_team(db=db, team_name=team_name)
     if not team:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Team '{team_name}' not found.",
         )
+    remaining = TeamService.get_timer_remaining_seconds(team.started_at)
     return TeamResponse(
         team_name=team.team_name,
         member_names=team.member_names,
         started_at=team.started_at,
+        timer_remaining_seconds=remaining,
+        session_duration_seconds=9000,
+        is_expired=remaining <= 0,
     )
 
 

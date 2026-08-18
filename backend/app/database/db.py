@@ -53,22 +53,8 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def seed_initial_data(db: Session) -> None:
-    """Seeds default team if the database is empty."""
-    from app.database.models import TeamModel
-
-    demo_team = db.query(TeamModel).filter(TeamModel.team_name == "TEAM-01").first()
-    if not demo_team:
-        logger.info("Seeding default event team (TEAM-01)...")
-        demo_team = TeamModel(
-            team_name="TEAM-01",
-            member_names=["Pawan", "Rahul", "Kabilan"],
-        )
-        db.add(demo_team)
-        try:
-            db.commit()
-        except Exception as err:
-            db.rollback()
-            logger.debug(f"Default team seeding skipped (already exists): {err}")
+    """Initializes empty database state if required."""
+    pass
 
 
 def init_db() -> None:

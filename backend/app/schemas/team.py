@@ -19,6 +19,9 @@ class TeamResponse(BaseModel):
     team_name: str = Field(..., description="Team name primary key")
     member_names: List[str] = Field(..., description="List of member names")
     started_at: datetime = Field(..., description="Timestamp when team started arena session")
+    timer_remaining_seconds: int = Field(default=9000, description="Remaining session time in seconds")
+    session_duration_seconds: int = Field(default=9000, description="Total competition session duration")
+    is_expired: bool = Field(default=False, description="Whether competition session has expired")
 
 
 class PromptLogResponse(BaseModel):

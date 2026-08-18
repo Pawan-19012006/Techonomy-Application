@@ -7,8 +7,30 @@ from app.database.models import PromptLogModel, TeamModel, TeamQuotaModel, utc_n
 from app.utils.logging import logger
 
 
+from datetime import datetime, timezone
+
+EVENT_DURATION_SECONDS = 9000  # 2 Hours 30 Minutes competition duration
+
+
 class TeamService:
     """Service isolating team arena management and prompt log database operations."""
+
+    @staticmethod
+    def get_timer_remaining_seconds(started_at: Optional[datetime]) -> int:
+        """Computes remaining seconds for a team's 2h 30m competition session."""
+        if not started_at:
+            return EVENT_DURATION_SECONDS
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        now = utc_now()
+        elapsed = (now - started_at).total_seconds()
+        remaining = EVENT_DURATION_SECONDS - int(elapsed)
+        return max(0, remaining)
+
+    @staticmethod
+    def is_session_expired(started_at: Optional[datetime]) -> bool:
+        """Returns True if the team's 2h 30m competition session duration has elapsed."""
+        return TeamService.get_timer_remaining_seconds(started_at) <= 0
 
     @staticmethod
     def join_team(db: Session, team_name: str, member_names: List[str]) -> TeamModel:

@@ -2,6 +2,17 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { TeamData } from '../types';
 import { getTeam } from '../services/api';
 
+export const EVENT_DURATION_SECONDS = 9000; // 2 Hours 30 Minutes
+
+export const getRemainingSeconds = (startedAtStr?: string): number => {
+  if (!startedAtStr) return EVENT_DURATION_SECONDS;
+  const startedAtMs = new Date(startedAtStr).getTime();
+  if (isNaN(startedAtMs)) return EVENT_DURATION_SECONDS;
+  const endMs = startedAtMs + EVENT_DURATION_SECONDS * 1000;
+  const remainingMs = endMs - Date.now();
+  return Math.max(0, Math.floor(remainingMs / 1000));
+};
+
 interface AuthContextType {
   user: TeamData | null;
   isAuthenticated: boolean;
@@ -9,8 +20,8 @@ interface AuthContextType {
   loginTeam: (teamData: TeamData) => void;
   logoutTeam: () => void;
   refetchTeam: () => Promise<void>;
-  // Aliases for backwards compatibility with existing UI components
-  login?: (token: string, rememberMe?: boolean) => Promise<void>;
+  timerRemainingSeconds: number;
+  isSessionExpired: boolean;
   logout?: () => void;
 }
 
@@ -29,8 +40,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return null;
   });
-  const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [timerRemainingSeconds, setTimerRemainingSeconds] = useState<number>(() =>
+    getRemainingSeconds(user?.started_at)
+  );
+  const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
+
+  // Sync team data from backend on mount
   useEffect(() => {
     const restoreTeam = async () => {
       const saved = localStorage.getItem('techonomy_team');
@@ -38,7 +55,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const parsed: TeamData = JSON.parse(saved);
           setUser(parsed);
-          // Refresh team data from backend if server is reachable
           try {
             const fetched = await getTeam(parsed.team_name);
             if (fetched && fetched.team_name) {
@@ -46,7 +62,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               localStorage.setItem('techonomy_team', JSON.stringify(fetched));
             }
           } catch (err) {
-            // If server unavailable, keep local restored team
             console.warn('Backend unavailable during team refresh, using cached team info');
           }
         } catch (e) {
@@ -60,15 +75,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     restoreTeam();
   }, []);
 
+  // Synchronized Event Session Countdown Timer
+  useEffect(() => {
+    if (!user?.started_at) {
+      setTimerRemainingSeconds(EVENT_DURATION_SECONDS);
+      setIsSessionExpired(false);
+      return;
+    }
+
+    const updateTimer = () => {
+      const remaining = getRemainingSeconds(user.started_at);
+      setTimerRemainingSeconds(remaining);
+      if (remaining <= 0) {
+        setIsSessionExpired(true);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [user?.started_at]);
+
   const loginTeam = (teamData: TeamData) => {
     localStorage.setItem('techonomy_team', JSON.stringify(teamData));
     setUser(teamData);
+    setTimerRemainingSeconds(getRemainingSeconds(teamData.started_at));
+    setIsSessionExpired(getRemainingSeconds(teamData.started_at) <= 0);
     setIsLoading(false);
   };
 
   const logoutTeam = () => {
     localStorage.removeItem('techonomy_team');
     setUser(null);
+    setTimerRemainingSeconds(EVENT_DURATION_SECONDS);
+    setIsSessionExpired(false);
     setIsLoading(false);
   };
 
@@ -94,6 +134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginTeam,
         logoutTeam,
         refetchTeam,
+        timerRemainingSeconds,
+        isSessionExpired,
         logout: logoutTeam,
       }}
     >
@@ -102,10 +144,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuthContext = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuthContext must be used within an AuthProvider');
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };
+
+export const useAuthContext = useAuth;

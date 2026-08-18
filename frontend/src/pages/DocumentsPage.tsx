@@ -30,10 +30,10 @@ export const DocumentsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">
-            Knowledge Base
+            Event Documents
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Your organization's official documents indexed into 384-dimensional vector storage.
+            Official competition documents indexed for AI vector retrieval.
           </p>
         </div>
 

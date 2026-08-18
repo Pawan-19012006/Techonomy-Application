@@ -11,16 +11,16 @@ import { toast } from 'sonner';
 const CHAT_HISTORY_KEY = 'kairos_chat_history';
 
 const SUGGESTED_PROMPTS = [
-  'What are our primary business objectives?',
-  'Summarize the financial projections in our reports.',
-  'What compliance and security guidelines are listed?',
+  'What are the key technical specifications in the event documents?',
+  'Summarize the primary guidelines and constraints for this challenge.',
+  'Extract critical data points and figures from the knowledge base.',
 ];
 
 const DEFAULT_INITIAL_MESSAGES: ChatMessageType[] = [
   {
     id: '1',
     sender: 'assistant',
-    text: "Hello Team! I am **Kairos**, your Enterprise Knowledge Intelligence Assistant. Ask me any question about your company documents, operational guidelines, or financial reports.",
+    text: "Hello Team! I am **Kairos**, your AI Challenge Assistant. Ask me any question to analyze your event documents and extract grounded answers for your team.",
     timestamp: '09:00 AM',
   },
 ];
@@ -154,7 +154,7 @@ export const KnowledgeAssistantPage: React.FC = () => {
             </span>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Search your organization's knowledge and get answers grounded in trusted sources.
+            Investigate event documents and generate grounded answers for your team.
           </p>
         </div>
 

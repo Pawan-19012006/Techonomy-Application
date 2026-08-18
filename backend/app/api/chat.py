@@ -74,6 +74,14 @@ async def process_chat_query(
 
     active_team_name = str(team.team_name)
 
+    # 0. Enforce Competition Session Timer Expiration Gate
+    if TeamService.is_session_expired(team.started_at):
+        logger.warning(f"[SESSION EXPIRED] Team '{active_team_name}' competition session expired.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Competition session expired. Submissions are closed for your team.",
+        )
+
     # 1. Atomically reserve team prompt quota with timing
     t_db1 = time.perf_counter()
     reserved = TeamService.reserve_team_quota(db=db, team_name=active_team_name)
@@ -158,6 +166,14 @@ async def stream_chat_query(
     tracker.record_db_team_lookup((time.perf_counter() - t_db0) * 1000.0)
 
     active_team_name = str(team.team_name)
+
+    # 0. Enforce Competition Session Timer Expiration Gate
+    if TeamService.is_session_expired(team.started_at):
+        logger.warning(f"[SESSION EXPIRED] Team '{active_team_name}' competition session expired.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Competition session expired. Submissions are closed for your team.",
+        )
 
     # 1. Atomically reserve team prompt quota
     t_db1 = time.perf_counter()

@@ -3,9 +3,9 @@ import { DashboardData } from '../types';
 
 export const getDashboardApi = async (): Promise<DashboardData> => {
   const saved = localStorage.getItem('techonomy_team');
-  let teamName = 'TEAM-01';
+  let teamName = '';
   let memberNames: string[] = [];
-  let startedAt = new Date().toISOString();
+  let startedAt = '';
 
   if (saved) {
     try {

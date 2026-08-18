@@ -117,9 +117,9 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { loginTeam } = useAuth();
 
-  const [teamName, setTeamName] = useState('TEAM-01');
+  const [teamName, setTeamName] = useState('');
   const [members, setMembers] = useState<MemberRow[]>([
-    { id: '1', name: 'Pawan', roll: '21CS001' },
+    { id: '1', name: '', roll: '' },
   ]);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

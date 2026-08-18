@@ -2,6 +2,9 @@ export interface TeamData {
   team_name: string;
   member_names: string[];
   started_at: string;
+  timer_remaining_seconds?: number;
+  session_duration_seconds?: number;
+  is_expired?: boolean;
   // Backwards compatibility fields
   id?: number;
   name?: string;
