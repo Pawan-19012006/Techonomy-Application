@@ -1,0 +1,51 @@
+# =====================================================================
+# TECHONOMY DOCKER BUILD IGNORE RULES (.dockerignore)
+# =====================================================================
+
+# Version Control
+.git
+.gitignore
+
+# Environment Variables & Secrets
+.env
+**/.env
+*.env
+
+# Python Virtual Environments & Cache
+.venv
+**/.venv
+venv
+**/venv
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+
+# Node.js Dependencies & Build Outputs
+node_modules
+**/node_modules
+frontend/dist
+frontend/dist-ssr
+.npm
+
+# Databases & Vector DB Storage
+*.db
+*.sqlite
+qdrant_storage
+**/qdrant_storage
+
+# Runtime Logs, Uploads & Exports
+logs
+**/logs
+*.log
+backend/logs
+backend/data/uploads
+backend/data/exports
+backend/tmp
+
+# OS & Editor Artifacts
+.DS_Store
+.vscode
+.idea
