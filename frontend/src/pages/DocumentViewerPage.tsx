@@ -46,6 +46,12 @@ const PageCanvas: React.FC<PageCanvasProps> = ({
     height: 800,
   });
 
+  useEffect(() => {
+    if (isTargetPage) {
+      setShouldRender(true);
+    }
+  }, [isTargetPage]);
+
   // Observe viewport visibility for lazy rendering
   useEffect(() => {
     const el = containerRef.current;
@@ -209,9 +215,9 @@ export const DocumentViewerPage: React.FC = () => {
 
   const { data: documents = [] } = useDocuments();
 
-  const initialPage = parseInt(searchParams.get('page') || '1', 10);
-  const [targetPage] = useState<number>(initialPage > 0 ? initialPage : 1);
-  const [currentPage, setCurrentPage] = useState<number>(initialPage > 0 ? initialPage : 1);
+  const rawPageParam = searchParams.get('page');
+  const targetPage = rawPageParam ? Math.max(1, parseInt(rawPageParam, 10) || 1) : 1;
+  const [currentPage, setCurrentPage] = useState<number>(targetPage);
   const [scale, setScale] = useState<number>(1.2);
 
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
@@ -265,16 +271,17 @@ export const DocumentViewerPage: React.FC = () => {
     };
   }, [documentName]);
 
-  // Jump to target page on initial load
+  // Jump to target page when PDF finishes loading or targetPage changes
   useEffect(() => {
     if (!loading && pdfDoc && targetPage > 0) {
-      setTimeout(() => {
+      setCurrentPage(targetPage);
+      const timer = setTimeout(() => {
         const el = document.getElementById(`pdf-page-${targetPage}`);
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          setCurrentPage(targetPage);
         }
-      }, 350);
+      }, 250);
+      return () => clearTimeout(timer);
     }
   }, [loading, pdfDoc, targetPage]);
 

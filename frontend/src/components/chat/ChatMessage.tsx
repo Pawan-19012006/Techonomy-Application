@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Bot, User, Sparkles, FileText, Copy, Check, ExternalLink } from 'lucide-react';
 import { ChatMessage as ChatMessageType } from '../../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
@@ -12,6 +12,7 @@ interface ChatMessageProps {
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const isUser = message.sender === 'user';
   const hasSources = !isUser && message.sources && message.sources.length > 0;
   const [copied, setCopied] = useState(false);
@@ -27,7 +28,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }
   const handleCitationClick = (docName: string, pageNum?: number | null) => {
     const cleanDoc = docName.trim();
     const pageParam = pageNum && pageNum > 0 ? `?page=${pageNum}` : '';
-    navigate(`/documents/${encodeURIComponent(cleanDoc)}${pageParam}`);
+    const prefix = location.pathname.startsWith('/admin') ? '/admin/documents' : '/documents';
+    navigate(`${prefix}/${encodeURIComponent(cleanDoc)}${pageParam}`);
   };
 
   return (

@@ -315,10 +315,12 @@ class QdrantClientWrapper:
                 "vectors_count": info.vectors_count if hasattr(info, "vectors_count") else info.points_count,
                 "points_count": info.points_count,
             }
-        except UnexpectedResponse as e:
+        except (UnexpectedResponse, ValueError) as e:
             logger.warning(f"Collection '{collection_name}' not found: {e}")
             return {"name": collection_name, "status": "NOT_FOUND", "vectors_count": 0, "points_count": 0}
         except Exception as e:
+            if "not found" in str(e).lower():
+                return {"name": collection_name, "status": "NOT_FOUND", "vectors_count": 0, "points_count": 0}
             logger.error(f"Error fetching info for collection '{collection_name}': {e}")
             raise QdrantClientWrapperError(f"Failed to fetch info for '{collection_name}': {str(e)}") from e
 

@@ -111,5 +111,8 @@ class VectorSearch:
             return results
 
         except Exception as e:
-            logger.error(f"Vector search failed in collection '{self.collection_name}': {e}")
+            if "not found" in str(e).lower():
+                logger.warning(f"Vector search collection '{target_collection}' not found. Returning empty results.")
+                return []
+            logger.error(f"Vector search failed in collection '{target_collection}': {e}")
             raise VectorSearchError(f"Vector search failed: {str(e)}") from e
