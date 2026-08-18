@@ -44,7 +44,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
     { label: 'Ask Kairos', path: '/assistant', icon: Bot },
     { label: 'Documents', path: '/documents', icon: FileText },
     { label: 'Rules', path: '/rules', icon: BookOpen },
-    { label: 'Team', path: '/team', icon: Users },
   ];
 
   const isLowTime = timerRemainingSeconds < 600; // <10 mins

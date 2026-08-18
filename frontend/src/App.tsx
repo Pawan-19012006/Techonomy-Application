@@ -14,7 +14,6 @@ import { DocumentsPage } from './pages/DocumentsPage';
 import { DocumentViewerPage } from './pages/DocumentViewerPage';
 import { KnowledgeAssistantPage } from './pages/KnowledgeAssistantPage';
 import { RulesPage } from './pages/RulesPage';
-import { TeamPage } from './pages/TeamPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 const queryClient = new QueryClient({
@@ -46,7 +45,6 @@ export const App: React.FC = () => {
                   <Route path="/documents/:docId" element={<DocumentViewerPage />} />
                   <Route path="/assistant" element={<KnowledgeAssistantPage />} />
                   <Route path="/rules" element={<RulesPage />} />
-                  <Route path="/team" element={<TeamPage />} />
                 </Route>
               </Route>
 

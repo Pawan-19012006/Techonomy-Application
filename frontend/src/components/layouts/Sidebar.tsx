@@ -25,7 +25,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
     { label: 'Ask Kairos', path: '/assistant', icon: Bot },
     { label: 'Documents', path: '/documents', icon: FileText },
     { label: 'Rules', path: '/rules', icon: BookOpen },
-    { label: 'Team', path: '/team', icon: Users },
   ];
 
   return (

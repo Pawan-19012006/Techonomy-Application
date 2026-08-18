@@ -141,7 +141,6 @@ export const DashboardPage: React.FC = () => {
           iconColor="text-indigo-600 dark:text-indigo-400"
           badgeText="Registered"
           badgeType="info"
-          onClick={() => navigate('/team')}
         />
 
         <MetricCard
@@ -267,21 +266,21 @@ export const DashboardPage: React.FC = () => {
                 <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
               </div>
 
-              {/* Team Profile Quick Link */}
+              {/* Ask Kairos Quick Link */}
               <div
-                onClick={() => navigate('/team')}
+                onClick={() => navigate('/assistant')}
                 className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 cursor-pointer transition-colors flex items-center justify-between group"
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                    <Users className="w-4 h-4 text-slate-700 dark:text-slate-300" />
+                    <Bot className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-950 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                      Team Details
+                      Ask Kairos Assistant
                     </h4>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {memberNames.length} student member(s)
+                      Grounded AI RAG Reasoning
                     </p>
                   </div>
                 </div>
