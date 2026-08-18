@@ -77,18 +77,37 @@ QDRANT_COLLECTION_NAME=company_knowledge
 ```
 *(If `QDRANT_URL` and `QDRANT_API_KEY` are left blank, Techonomy falls back to the local `qdrant` container).*
 
-### D. Gemini API Credentials (Primary LLM)
+### D. Gemini API Credentials — 10 Primary Keys (G01..G10)
 ```env
-GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-GEMINI_API_KEY_1=YOUR_GEMINI_KEY_1
-GEMINI_API_KEY_2=YOUR_GEMINI_KEY_2
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY_1=your_gemini_key_1
+GEMINI_API_KEY_2=your_gemini_key_2
+GEMINI_API_KEY_3=your_gemini_key_3
+GEMINI_API_KEY_4=your_gemini_key_4
+GEMINI_API_KEY_5=your_gemini_key_5
+GEMINI_API_KEY_6=your_gemini_key_6
+GEMINI_API_KEY_7=your_gemini_key_7
+GEMINI_API_KEY_8=your_gemini_key_8
+GEMINI_API_KEY_9=your_gemini_key_9
+GEMINI_API_KEY_10=your_gemini_key_10
 GEMINI_MODEL=gemini-flash-lite-latest
 ```
 
-### E. OpenRouter API Credentials (Fallback LLM)
+### E. OpenRouter API Credentials — 10 Fallback Keys (N01..N10)
 ```env
-OPENROUTER_API_KEY=YOUR_OPENROUTER_API_KEY
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_API_KEY_1=your_openrouter_key_1
+OPENROUTER_API_KEY_2=your_openrouter_key_2
+OPENROUTER_API_KEY_3=your_openrouter_key_3
+OPENROUTER_API_KEY_4=your_openrouter_key_4
+OPENROUTER_API_KEY_5=your_openrouter_key_5
+OPENROUTER_API_KEY_6=your_openrouter_key_6
+OPENROUTER_API_KEY_7=your_openrouter_key_7
+OPENROUTER_API_KEY_8=your_openrouter_key_8
+OPENROUTER_API_KEY_9=your_openrouter_key_9
+OPENROUTER_API_KEY_10=your_openrouter_key_10
 OPENROUTER_MODEL=nvidia/nemotron-3.5-lightning:free
+MODEL_NAME=nvidia/nemotron-3.5-lightning:free
 ```
 
 ### F. Embedding & Retrieval Configuration
