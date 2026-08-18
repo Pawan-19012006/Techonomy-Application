@@ -22,6 +22,9 @@ class TeamResponse(BaseModel):
     timer_remaining_seconds: int = Field(default=9000, description="Remaining session time in seconds")
     session_duration_seconds: int = Field(default=9000, description="Total competition session duration")
     is_expired: bool = Field(default=False, description="Whether competition session has expired")
+    question_limit: int = Field(default=10, description="Maximum question limit for the event")
+    questions_used: int = Field(default=0, description="Number of questions used by team")
+    questions_remaining: int = Field(default=10, description="Number of questions remaining")
 
 
 class PromptLogResponse(BaseModel):

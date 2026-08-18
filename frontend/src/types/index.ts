@@ -11,6 +11,7 @@ export interface TeamData {
   email?: string;
   question_limit?: number;
   questions_used?: number;
+  questions_remaining?: number;
   is_admin?: boolean;
   created_at?: string;
 }

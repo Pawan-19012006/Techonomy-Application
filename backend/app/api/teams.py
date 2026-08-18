@@ -28,6 +28,9 @@ async def join_team(
         member_names=payload.member_names,
     )
     remaining = TeamService.get_timer_remaining_seconds(team.started_at)
+    quota = TeamService.get_or_create_team_quota(db, team.team_name)
+    used = quota.questions_used
+    limit = quota.question_limit
     return TeamResponse(
         team_name=team.team_name,
         member_names=team.member_names,
@@ -35,6 +38,9 @@ async def join_team(
         timer_remaining_seconds=remaining,
         session_duration_seconds=9000,
         is_expired=remaining <= 0,
+        question_limit=limit,
+        questions_used=used,
+        questions_remaining=max(0, limit - used),
     )
 
 
@@ -43,7 +49,7 @@ async def get_team(
     team_name: str,
     db: Annotated[Session, Depends(get_db)],
 ) -> TeamResponse:
-    """Retrieves team information including member names, started_at timestamp, and session timer."""
+    """Retrieves team information including member names, started_at timestamp, and persistent team quota."""
     team = TeamService.get_team(db=db, team_name=team_name)
     if not team:
         raise HTTPException(
@@ -51,6 +57,9 @@ async def get_team(
             detail=f"Team '{team_name}' not found.",
         )
     remaining = TeamService.get_timer_remaining_seconds(team.started_at)
+    quota = TeamService.get_or_create_team_quota(db, team.team_name)
+    used = quota.questions_used
+    limit = quota.question_limit
     return TeamResponse(
         team_name=team.team_name,
         member_names=team.member_names,
@@ -58,6 +67,9 @@ async def get_team(
         timer_remaining_seconds=remaining,
         session_duration_seconds=9000,
         is_expired=remaining <= 0,
+        question_limit=limit,
+        questions_used=used,
+        questions_remaining=max(0, limit - used),
     )
 
 

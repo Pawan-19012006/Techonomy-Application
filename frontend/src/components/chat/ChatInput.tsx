@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Send, Loader2, Sparkles, CornerDownLeft } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Send, Loader2, ArrowUp, CornerDownLeft } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -9,62 +9,70 @@ interface ChatInputProps {
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading, disabled = false }) => {
   const [input, setInput] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Auto-focus input when loading finishes
+  useEffect(() => {
+    if (!isLoading && !disabled && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isLoading, disabled]);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!input.trim() || isLoading || disabled) return;
     onSend(input.trim());
     setInput('');
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      handleSubmit();
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="relative space-y-2">
-      <div className="relative flex items-center shadow-sm">
-        <input
-          type="text"
+      <div className="relative flex items-end bg-white dark:bg-[#141C2E] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-md p-2 transition-colors focus-within:border-slate-900 dark:focus-within:border-slate-100">
+        <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          rows={1}
           placeholder={
             disabled
-              ? 'Question limit reached. Please contact event operator.'
-              : 'Ask Kairos about company documents, financials, operational strategy...'
+              ? 'Team question quota exhausted.'
+              : 'Ask Kairos about the event documents...'
           }
           disabled={disabled || isLoading}
-          className="kairos-input w-full pr-24 py-3.5 text-sm font-normal"
+          className="w-full bg-transparent border-0 resize-none py-2 px-3 text-sm text-slate-950 dark:text-slate-100 focus:outline-none placeholder:text-slate-400 font-normal leading-relaxed max-h-32 min-h-[42px]"
         />
 
-        <div className="absolute right-2 flex items-center gap-2">
+        <div className="p-1 shrink-0">
           <button
             type="submit"
             disabled={!input.trim() || isLoading || disabled}
-            className="kairos-btn-primary py-2 px-3 text-xs disabled:opacity-30 transition-all"
+            className="w-9 h-9 rounded-xl bg-slate-950 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center disabled:opacity-30 hover:opacity-90 transition-all shadow-sm active:scale-95"
+            title="Send Question"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <>
-                <span>Send</span>
-                <CornerDownLeft className="w-3.5 h-3.5" />
-              </>
+              <ArrowUp className="w-4 h-4 stroke-[2.5]" />
             )}
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1">
-        <span className="flex items-center gap-1">
-          <Sparkles className="w-3 h-3 text-slate-700 dark:text-slate-300" />
-          Grounded in official indexed documents
+      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 px-2">
+        <span>
+          {disabled ? 'QUOTA EXHAUSTED' : 'EVENT KNOWLEDGE BASE'}
         </span>
-        <span className="hidden sm:inline">Press <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px] font-mono text-slate-700 dark:text-slate-300">Enter</kbd> to submit</span>
+        <span className="hidden sm:inline">
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px] text-slate-700 dark:text-slate-300">Enter</kbd> to submit · <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px] text-slate-700 dark:text-slate-300">Shift + Enter</kbd> for new line
+        </span>
       </div>
     </form>
   );
