@@ -32,7 +32,7 @@ class LLMLane(BaseModel):
     enabled: bool = Field(default=True, description="Whether lane is administrative enabled")
     priority: LanePriority = Field(default=LanePriority.PRIMARY, description="Pool routing priority")
     max_concurrent_requests: int = Field(default=1, description="Configured maximum active concurrent requests per lane")
-    configured_test_request_limit: int = Field(default=3, description="Artificial test request limit for scheduling evaluation")
+    configured_test_request_limit: int = Field(default=50, description="Configured request limit per lane for scheduling evaluation")
     requests_used: int = Field(default=0, description="Total requests reserved on this lane")
     active_requests: int = Field(default=0, description="Current in-flight active requests on this lane")
     state: LaneState = Field(default=LaneState.AVAILABLE, description="Current operational state of the lane")

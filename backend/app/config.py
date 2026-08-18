@@ -134,12 +134,14 @@ class Settings(BaseSettings):
 
     GEMINI_MODEL: str = "gemini-flash-lite-latest"
     GEMINI_ENABLED: bool = True
-    GEMINI_TEST_REQUEST_LIMIT: int = 3
+    GEMINI_REQUEST_LIMIT: int = 50
+    GEMINI_TEST_REQUEST_LIMIT: int = 50
     GEMINI_MAX_CONCURRENT_REQUESTS: int = 1
     GEMINI_NUM_LANES: int = 10
 
     NEMOTRON_ENABLED: bool = True
-    NEMOTRON_TEST_REQUEST_LIMIT: int = 3
+    NEMOTRON_REQUEST_LIMIT: int = 50
+    NEMOTRON_TEST_REQUEST_LIMIT: int = 50
     NEMOTRON_MAX_CONCURRENT_REQUESTS: int = 1
     NEMOTRON_NUM_LANES: int = 10
 

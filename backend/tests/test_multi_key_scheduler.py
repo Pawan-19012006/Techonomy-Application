@@ -148,3 +148,90 @@ def test_legacy_single_key_fallback():
 
     lane_n = scheduler.nemotron_pool["N01"]
     assert scheduler.get_api_key_for_lane(lane_n) == "fallback_openrouter_single_key"
+
+
+def test_50_request_quota_per_lane():
+    """Verify default request limit per lane is 50 for all 20 lanes (G01..G10 and N01..N10)."""
+    scheduler = QuotaScheduler(
+        gemini_api_key="g_key",
+        nemotron_api_key="n_key",
+        gemini_enabled=True,
+        nemotron_enabled=True,
+    )
+
+    assert len(scheduler.gemini_pool) == 10
+    assert len(scheduler.nemotron_pool) == 10
+
+    for lane_id, lane in scheduler.gemini_pool.items():
+        assert lane.configured_test_request_limit == 50, f"Gemini lane {lane_id} daily_limit must be 50"
+
+    for lane_id, lane in scheduler.nemotron_pool.items():
+        assert lane.configured_test_request_limit == 50, f"Nemotron lane {lane_id} daily_limit must be 50"
+
+
+def test_single_lane_exhaustion_does_not_exhaust_sibling_lanes():
+    """Verify G01 reaching 50 requests does NOT exhaust G02..G10 or N01..N10."""
+    g_keys = [f"g_key_{i}" for i in range(1, 11)]
+    o_keys = [f"o_key_{i}" for i in range(1, 11)]
+
+    scheduler = QuotaScheduler(
+        gemini_api_keys=g_keys,
+        openrouter_api_keys=o_keys,
+        gemini_enabled=True,
+        nemotron_enabled=True,
+    )
+
+    # Manually exhaust G01 in DB so scheduler sync picks up persistent state
+    db = SessionLocal()
+    try:
+        db.query(LLMLaneModel).filter(LLMLaneModel.lane_id == "G01").update({
+            LLMLaneModel.requests_used: 50,
+            LLMLaneModel.state: LaneState.DAILY_EXHAUSTED.value,
+        })
+        db.commit()
+    finally:
+        db.close()
+
+    # Next select_lane_sync must pick G02
+    lane, api_key, is_fallback = scheduler.select_lane_sync()
+    assert is_fallback is False
+    assert lane.lane_id == "G02"
+    assert api_key == "g_key_2"
+    scheduler.release_lane(lane.lane_id, success=True)
+
+
+def test_single_lane_rate_limit_isolation():
+    """Verify one Gemini lane receiving HTTP 429 rate limit does NOT block sibling Gemini lanes."""
+    g_keys = [f"g_key_{i}" for i in range(1, 11)]
+    scheduler = QuotaScheduler(
+        gemini_api_keys=g_keys,
+        gemini_enabled=True,
+        nemotron_enabled=False,
+    )
+
+    # Reserve G01 and simulate 429 rate limit response
+    lane1, _, _ = scheduler.select_lane_sync()
+    assert lane1.lane_id == "G01"
+    scheduler.release_lane("G01", success=False, status_code=429, error=Exception("HTTP 429 Rate Limit"))
+
+    assert scheduler.gemini_pool["G01"].state == LaneState.RATE_LIMITED
+
+    # Next reservation must seamlessly pick G02
+    lane2, api_key, is_fallback = scheduler.select_lane_sync()
+    assert is_fallback is False
+    assert lane2.lane_id == "G02"
+    assert api_key == "g_key_2"
+    scheduler.release_lane("G02", success=True)
+
+
+def test_http_max_connections_distinct_from_api_quota():
+    """Verify HTTP connection limits in providers.py are connection transport limits, not API quotas."""
+    from app.knowledge.rag.providers import get_shared_async_client, get_shared_sync_client
+    
+    sync_client = get_shared_sync_client()
+    assert sync_client._transport._pool._max_connections == 50
+
+    # API quota setting is distinct (50 requests per lane)
+    scheduler = QuotaScheduler(gemini_enabled=True)
+    assert scheduler.gemini_pool["G01"].configured_test_request_limit == 50
+
