@@ -80,6 +80,7 @@ export interface DashboardData {
   current_event?: string;
   timer_remaining_seconds?: number;
   question_limit?: number;
+  questions_used?: number;
   questions_remaining?: number;
 }
 

@@ -26,9 +26,17 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: dashboard, isLoading, isError, refetch } = useDashboard();
   const { data: documents = [] } = useDocuments();
-  const { user, timerRemainingSeconds } = useAuth();
+  const { user, timerRemainingSeconds, refetchTeam } = useAuth();
 
   const [selectedDoc, setSelectedDoc] = useState<DocumentMetadata | null>(null);
+
+  // Sync team quota and metrics on mount
+  React.useEffect(() => {
+    refetch();
+    if (refetchTeam) {
+      refetchTeam();
+    }
+  }, []);
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -41,8 +49,8 @@ export const DashboardPage: React.FC = () => {
   const teamName = user?.team_name || user?.name || dashboard?.team_name || 'TEAM-01';
   const memberNames = user?.member_names || dashboard?.member_names || ['Student Member'];
   const questionLimit = dashboard?.question_limit || user?.question_limit || 10;
-  const questionsRemaining = dashboard?.questions_remaining ?? 10;
-  const questionsUsed = Math.max(0, questionLimit - questionsRemaining);
+  const questionsUsed = dashboard?.questions_used ?? user?.questions_used ?? 0;
+  const questionsRemaining = dashboard?.questions_remaining ?? user?.questions_remaining ?? Math.max(0, questionLimit - questionsUsed);
 
   const formatTimer = (totalSeconds: number) => {
     const hrs = Math.floor(totalSeconds / 3600);
@@ -121,14 +129,26 @@ export const DashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         
         <MetricCard
-          title="Questions Remaining"
-          value={`${questionsRemaining} / ${questionLimit}`}
-          subtext={`${questionsUsed} question token(s) used`}
+          title="Questions Asked"
+          value={`${questionsUsed} / ${questionLimit}`}
+          subtext={`${questionsRemaining} question token(s) remaining`}
           icon={HelpCircle}
           iconBgColor="bg-amber-50 dark:bg-amber-950/40"
           iconColor="text-amber-600 dark:text-amber-400"
-          badgeText="Active Quota"
+          badgeText="Questions Used"
           badgeType="warning"
+          onClick={() => navigate('/assistant')}
+        />
+
+        <MetricCard
+          title="Remaining Quota"
+          value={`${questionsRemaining} Tokens`}
+          subtext={`Maximum ${questionLimit} total quota`}
+          icon={Zap}
+          iconBgColor="bg-emerald-50 dark:bg-emerald-950/40"
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          badgeText="Available"
+          badgeType="success"
           onClick={() => navigate('/assistant')}
         />
 
@@ -153,17 +173,6 @@ export const DashboardPage: React.FC = () => {
           badgeText="Qdrant Vectors"
           badgeType="info"
           onClick={() => navigate('/documents')}
-        />
-
-        <MetricCard
-          title="Competition Status"
-          value="ACTIVE"
-          subtext="Arena Connected · Ready"
-          icon={CheckCircle2}
-          iconBgColor="bg-emerald-50 dark:bg-emerald-950/40"
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          badgeText="Live Session"
-          badgeType="success"
         />
 
       </div>
