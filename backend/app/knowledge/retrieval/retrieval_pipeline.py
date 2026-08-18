@@ -12,6 +12,7 @@ from app.knowledge.retrieval.query_processor import QueryProcessor
 from app.knowledge.retrieval.reranker import Reranker
 from app.knowledge.retrieval.search_filters import SearchFilters
 from app.knowledge.retrieval.vector_search import VectorSearch
+from app.knowledge.retrieval.instruction_planner import InstructionPlanner
 from app.utils.logging import logger
 from app.utils.observability import (
     get_request_id,
@@ -21,7 +22,9 @@ from app.utils.observability import (
 
 
 class RetrievalPipeline:
-    """Orchestrates Phase 5 Knowledge Retrieval pipeline: Query -> Decompose -> Embed Subqueries -> VectorSearch -> Merge/Deduplicate -> Rerank -> ContextBuilder -> RetrievalResult."""
+    """Orchestrates Phase 5 Two-Stage Knowledge Retrieval pipeline:
+    Stage 1 (Instruction RAG & Retrieval Plan) -> Stage 2 (Company Vector Search & Evidence Validation) -> Rerank -> ContextBuilder.
+    """
 
     def __init__(
         self,
@@ -31,6 +34,7 @@ class RetrievalPipeline:
         reranker: Optional[Reranker] = None,
         context_builder: Optional[ContextBuilder] = None,
         query_decomposer: Optional[QueryDecomposer] = None,
+        instruction_planner: Optional[InstructionPlanner] = None,
     ):
         """Initializes RetrievalPipeline with injected module components."""
         self.query_processor = query_processor or QueryProcessor()
@@ -39,6 +43,7 @@ class RetrievalPipeline:
         self.reranker = reranker or Reranker()
         self.context_builder = context_builder or ContextBuilder()
         self.query_decomposer = query_decomposer or QueryDecomposer()
+        self.instruction_planner = instruction_planner or InstructionPlanner()
 
     def retrieve(
         self,
@@ -50,37 +55,49 @@ class RetrievalPipeline:
         request_id: Optional[str] = None,
         tracker: Optional[Any] = None,
     ) -> RetrievalResult:
-        """Executes full Knowledge Retrieval Engine pipeline supporting multi-query decomposition with high-resolution timing."""
+        """Executes full Knowledge Retrieval Engine pipeline supporting two-stage instruction-guided retrieval."""
         pipeline_start = time.perf_counter()
         req_id = get_request_id(request_id)
-        logger.info(f"=== Starting Knowledge Retrieval Engine (req_id={req_id}) for query: '{query[:60]}...' ===")
+        logger.info(f"=== Starting Two-Stage Knowledge Retrieval Engine (req_id={req_id}) for query: '{query[:60]}...' ===")
 
         try:
-            # Stage 1: Query Processor & Query Decomposition
+            # STAGE 1: Instruction RAG & Retrieval Plan Generation
+            t_inst0 = time.perf_counter()
+            instruction_chunks = self.instruction_planner.retrieve_instruction_guidance(query=query)
+            retrieval_plan = self.instruction_planner.create_retrieval_plan(query=query, instruction_chunks=instruction_chunks)
+            t_instruction_ms = (time.perf_counter() - t_inst0) * 1000.0
+
+            # Query Processor & Query Decomposition
             t0 = time.perf_counter()
             processed_query = self.query_processor.process(query)
+            decomposed_subqueries = self.query_decomposer.decompose(processed_query.normalized_query)
 
-            # Query Decomposition
-            subqueries = self.query_decomposer.decompose(processed_query.normalized_query)
-            subquery_count = len(subqueries)
+            # Merge decomposed subqueries with instruction plan search queries
+            combined_queries = list(dict.fromkeys(decomposed_subqueries + retrieval_plan.company_search_queries))
+            subquery_count = len(combined_queries)
 
             subquery_log = [
-                f"\n[QUERY DECOMPOSITION]\noriginal={processed_query.normalized_query}\nsubquery_count={subquery_count}"
+                f"\n[TWO-STAGE QUERY PLAN]\nintent={retrieval_plan.intent}\noriginal={processed_query.normalized_query}\nquery_count={subquery_count}"
             ]
-            for idx, sq in enumerate(subqueries, start=1):
-                subquery_log.append(f"subquery_{idx}={sq}")
+            for idx, sq in enumerate(combined_queries, start=1):
+                subquery_log.append(f"query_{idx}={sq}")
             logger.info("\n".join(subquery_log))
 
             t_qp = time.perf_counter() - t0
 
-            # Stage 2 & 3: Independent Subquery Embedding & Vector Search
+            # STAGE 2: Company Evidence Retrieval (company_knowledge ONLY)
             t_embed_total = 0.0
             t_search_total = 0.0
             merged_raw_matches = []
             seen_keys = set()
             dimension = 384
 
-            for sq in subqueries:
+            # Enforce Strict Company Evidence Boundary Filter
+            company_filters = filters if filters is not None else SearchFilters()
+            company_filters.document_type = "company"
+            company_filters.visibility = "user_visible"
+
+            for sq in combined_queries:
                 sq_processed = self.query_processor.process(sq)
 
                 t1 = time.perf_counter()
@@ -92,16 +109,19 @@ class RetrievalPipeline:
                 sq_matches = self.vector_search.search(
                     query_vector=sq_vector,
                     top_k=top_k,
-                    filters=filters,
+                    filters=company_filters,
+                    collection_name=settings.QDRANT_COMPANY_COLLECTION_NAME,
                 )
                 t_search_total += time.perf_counter() - t2
 
-                logger.info(
-                    f"\n[RETRIEVAL]\nsubquery='{sq}'\ncandidate_count={len(sq_matches)}"
-                )
-
-                # Deduplicate candidates across subqueries
+                # Deduplicate candidates across queries and enforce company boundary
                 for match in sq_matches:
+                    doc_type = getattr(match, "document_type", "company")
+                    vis = getattr(match, "visibility", "user_visible")
+                    # Strict Evidence Gate: Never allow instruction chunks into company evidence
+                    if doc_type == "instruction" or vis == "internal":
+                        continue
+
                     pages_tuple = tuple(sorted(match.page_numbers)) if match.page_numbers else ()
                     unique_key = (match.document_name, pages_tuple, match.chunk_id)
                     if unique_key not in seen_keys:
@@ -172,6 +192,7 @@ class RetrievalPipeline:
                 context_package=context_package,
                 processing_time=round(total_elapsed, 3),
                 timing=timing,
+                retrieval_plan=retrieval_plan,
             )
 
             logger.info(

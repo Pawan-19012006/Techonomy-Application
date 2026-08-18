@@ -78,7 +78,11 @@ def init_db() -> None:
     """Initializes database tables according to SQLAlchemy Declarative models and seeds default data."""
     import app.database.models  # Ensure models are registered on Base.metadata
     logger.info("Initializing database tables...")
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger.warning(f"Database table creation notice: {e}")
+
     ensure_schema_migrations()
     logger.info("Database tables initialized successfully.")
 

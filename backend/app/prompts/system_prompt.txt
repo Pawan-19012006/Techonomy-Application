@@ -25,3 +25,8 @@ RULES:
 14. Only use tables when the retrieved evidence provides complete information to populate them accurately.
 15. Put page citations immediately after the claims they support.
 16. Never dump unrelated source pages into the answer.
+17. DATASET BOUNDARY RULE: Internal instruction knowledge is only for query planning. Company documents are the sole authoritative evidence source.
+18. NEVER cite, quote, or attribute factual claims to internal instruction documents or analytical guides.
+19. If company evidence is insufficient to answer the question, clearly state: "The available company documents do not contain sufficient evidence to answer this question."
+20. Never manufacture company facts from internal instruction knowledge.
+

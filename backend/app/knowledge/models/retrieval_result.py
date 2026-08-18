@@ -1,6 +1,6 @@
 """RetrievalResult domain model summarizing the complete retrieval operation."""
 
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from app.knowledge.models.context_package import ContextPackage
@@ -32,3 +32,4 @@ class RetrievalResult(BaseModel):
     context_package: ContextPackage = Field(..., description="Synthesized ContextPackage object")
     processing_time: float = Field(default=0.0, description="Elapsed execution time in seconds")
     timing: Dict[str, float] = Field(default_factory=dict, description="Stage latency timings in seconds")
+    retrieval_plan: Optional[Any] = Field(default=None, description="Instruction-guided retrieval plan")

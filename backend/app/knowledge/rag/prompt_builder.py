@@ -44,12 +44,17 @@ class PromptBuilder:
         return self._system_message
 
     def format_context_chunks(self, chunks: List[SearchResult]) -> str:
-        """Formats retrieved SearchResult chunks into structured context text."""
-        if not chunks:
-            return "No relevant context chunks found."
+        """Formats retrieved SearchResult chunks into structured context text (Company Evidence ONLY)."""
+        company_chunks = [
+            c for c in chunks
+            if getattr(c, "document_type", "company") == "company" and getattr(c, "visibility", "user_visible") == "user_visible"
+        ]
+
+        if not company_chunks:
+            return "No relevant company document context found."
 
         formatted_blocks = []
-        for idx, chunk in enumerate(chunks, start=1):
+        for idx, chunk in enumerate(company_chunks, start=1):
             pages_str = ", ".join(str(p) for p in chunk.page_numbers) if chunk.page_numbers else "N/A"
             block = (
                 f"Chunk {idx}\n"

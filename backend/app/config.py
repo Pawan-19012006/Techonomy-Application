@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     QDRANT_URL: str = ""
     QDRANT_API_KEY: str = ""
     QDRANT_COLLECTION_NAME: str = "company_knowledge"
+    QDRANT_COMPANY_COLLECTION_NAME: str = "company_knowledge"
+    QDRANT_INSTRUCTION_COLLECTION_NAME: str = "instruction_knowledge"
     QDRANT_DISTANCE_METRIC: str = "Cosine"
     QDRANT_STORAGE_PATH: str = "./qdrant_storage"
     QDRANT_TIMEOUT_SECONDS: float = 10.0

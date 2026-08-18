@@ -43,9 +43,19 @@ class PayloadBuilder:
                 or f"Document_{chunk.document_id[:8]}"
             )
 
+            doc_type = (
+                chunk.metadata.get("document_type")
+                or ("instruction" if "instruction" in doc_name.lower() or "guide" in doc_name.lower() else "company")
+            )
+            visibility = "user_visible" if doc_type == "company" else "internal"
+            source_type = "official_company_document" if doc_type == "company" else "analytical_instruction"
+
             payload = {
                 "document_id": chunk.document_id,
                 "document_name": doc_name,
+                "document_type": doc_type,
+                "visibility": visibility,
+                "source_type": source_type,
                 "chunk_id": chunk.chunk_id,
                 "page_start": page_start,
                 "page_end": page_end,
@@ -57,7 +67,12 @@ class PayloadBuilder:
                 "estimated_tokens": chunk.estimated_tokens,
                 "character_count": chunk.char_count,
                 "content": chunk.content,
-                "metadata": dict(chunk.metadata),
+                "metadata": {
+                    **dict(chunk.metadata),
+                    "document_type": doc_type,
+                    "visibility": visibility,
+                    "source_type": source_type,
+                },
                 "version": version,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }

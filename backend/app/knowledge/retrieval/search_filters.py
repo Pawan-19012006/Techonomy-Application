@@ -20,23 +20,52 @@ class SearchFilters(BaseModel):
     """
 
     document_id: Optional[Union[str, List[str]]] = Field(default=None, description="Document ID or list of IDs")
+    document_type: Optional[Union[str, List[str]]] = Field(default=None, description="Document type filter (company or instruction)")
+    visibility: Optional[Union[str, List[str]]] = Field(default=None, description="Visibility filter (user_visible or internal)")
     page_numbers: Optional[Union[int, List[int]]] = Field(default=None, description="Page number or list of page numbers")
     section_type: Optional[Union[str, List[str]]] = Field(default=None, description="Section type or list of section types")
     minimum_similarity: Optional[float] = Field(default=None, description="Minimum similarity threshold")
     extra_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Extra metadata key-value filters")
 
     def to_qdrant_filter(self) -> Optional[rest_models.Filter]:
-        """Converts filter criteria into a native Qdrant rest_models.Filter object.
-
-        Returns:
-            Optional[rest_models.Filter]: Qdrant Filter object, or None if no filters applied.
-
-        Raises:
-            SearchFilterError: If filter construction fails.
-        """
+        """Converts filter criteria into a native Qdrant rest_models.Filter object."""
         must_conditions: List[rest_models.Condition] = []
 
         try:
+            # Filter by document_type
+            if self.document_type is not None:
+                if isinstance(self.document_type, list):
+                    must_conditions.append(
+                        rest_models.FieldCondition(
+                            key="document_type",
+                            match=rest_models.MatchAny(any=self.document_type),
+                        )
+                    )
+                else:
+                    must_conditions.append(
+                        rest_models.FieldCondition(
+                            key="document_type",
+                            match=rest_models.MatchValue(value=self.document_type),
+                        )
+                    )
+
+            # Filter by visibility
+            if self.visibility is not None:
+                if isinstance(self.visibility, list):
+                    must_conditions.append(
+                        rest_models.FieldCondition(
+                            key="visibility",
+                            match=rest_models.MatchAny(any=self.visibility),
+                        )
+                    )
+                else:
+                    must_conditions.append(
+                        rest_models.FieldCondition(
+                            key="visibility",
+                            match=rest_models.MatchValue(value=self.visibility),
+                        )
+                    )
+
             # Filter by document_id
             if self.document_id is not None:
                 if isinstance(self.document_id, list):

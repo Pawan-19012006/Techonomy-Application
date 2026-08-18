@@ -32,24 +32,13 @@ class VectorSearch:
         top_k: int = settings.RETRIEVAL_TOP_K,
         filters: Optional[SearchFilters] = None,
         min_score: Optional[float] = settings.RETRIEVAL_MINIMUM_SIMILARITY,
+        collection_name: Optional[str] = None,
     ) -> List[SearchResult]:
-        """Performs dense vector similarity search in Qdrant and maps hits to SearchResult objects.
-
-        Args:
-            query_vector (List[float]): Dense query vector floats.
-            top_k (int): Number of top matches to retrieve (default 10).
-            filters (Optional[SearchFilters]): Reusable search filters.
-            min_score (Optional[float]): Minimum similarity score filter.
-
-        Returns:
-            List[SearchResult]: List of retrieved SearchResult matches sorted by score descending.
-
-        Raises:
-            VectorSearchError: If vector search execution fails.
-        """
+        """Performs dense vector similarity search in Qdrant and maps hits to SearchResult objects."""
         if not query_vector:
             raise VectorSearchError("Query vector cannot be empty.")
 
+        target_collection = collection_name or self.collection_name
         client = self.client_wrapper.connect()
         qdrant_filter = filters.to_qdrant_filter() if filters else None
 
@@ -58,7 +47,7 @@ class VectorSearch:
         )
 
         logger.info(
-            f"Executing Qdrant vector search in '{self.collection_name}' "
+            f"Executing Qdrant vector search in '{target_collection}' "
             f"(top_k={top_k}, min_similarity={min_similarity})..."
         )
 
@@ -66,7 +55,7 @@ class VectorSearch:
             # Query Qdrant
             if hasattr(client, "search"):
                 hits = client.search(
-                    collection_name=self.collection_name,
+                    collection_name=target_collection,
                     query_vector=query_vector,
                     limit=top_k,
                     query_filter=qdrant_filter,
@@ -74,7 +63,7 @@ class VectorSearch:
                 )
             else:
                 response = client.query_points(
-                    collection_name=self.collection_name,
+                    collection_name=target_collection,
                     query=query_vector,
                     limit=top_k,
                     query_filter=qdrant_filter,
@@ -96,11 +85,16 @@ class VectorSearch:
                 reading_order = payload.get("reading_order", 0)
                 estimated_tokens = payload.get("estimated_tokens", 0)
 
+                doc_type = payload.get("document_type") or payload.get("metadata", {}).get("document_type") or "company"
+                visibility = payload.get("visibility") or payload.get("metadata", {}).get("visibility") or ("user_visible" if doc_type == "company" else "internal")
+
                 results.append(
                     SearchResult(
                         chunk_id=chunk_id,
                         document_id=doc_id,
                         document_name=doc_name,
+                        document_type=doc_type,
+                        visibility=visibility,
                         score=float(hit.score),
                         content=content,
                         page_numbers=page_numbers,

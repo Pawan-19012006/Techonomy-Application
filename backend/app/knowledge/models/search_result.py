@@ -25,6 +25,8 @@ class SearchResult(BaseModel):
     chunk_id: str = Field(..., description="Chunk UUID reference")
     document_id: str = Field(..., description="Document UUID reference")
     document_name: str = Field(..., description="Document filename or title")
+    document_type: str = Field(default="company", description="Document classification (company or instruction)")
+    visibility: str = Field(default="user_visible", description="Document visibility (user_visible or internal)")
     score: float = Field(..., description="Cosine similarity or reranked score")
     content: str = Field(..., description="Text content body of chunk")
     page_numbers: List[int] = Field(default_factory=list, description="Page numbers list")

@@ -3,6 +3,8 @@
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
+from app.config import settings
+
 from app.knowledge.analysis.hierarchy_builder import HierarchyBuilder
 from app.knowledge.analysis.statistics import StatisticsGenerator
 from app.knowledge.analysis.structure_analyzer import StructureAnalyzer
@@ -172,29 +174,78 @@ class IngestionPipeline:
         max_tokens: int = 512,
         recreate_collection: bool = False,
         collection_name: Optional[str] = None,
+        document_type: str = "company",
     ) -> IndexResult:
-        """Executes full end-to-end pipeline (Phase 1 + 2 + 3 + 4) on a PDF file.
-
-        Args:
-            file_path (Union[str, Path]): Path to PDF file.
-            document_id (Optional[str]): Optional custom document UUID.
-            max_tokens (int): Max token budget ceiling per chunk.
-            recreate_collection (bool): Recreate collection before indexing.
-            collection_name (Optional[str]): Target Qdrant collection name.
-
-        Returns:
-            IndexResult: Indexing result object.
-        """
+        """Executes full end-to-end pipeline (Phase 1 + 2 + 3 + 4) on a PDF file."""
         path = Path(file_path)
         chunks, _ = self.process_pdf_to_chunks(path, document_id=document_id, max_tokens=max_tokens)
+        
+        # Tag chunk metadata with document_type
+        target_vis = "user_visible" if document_type == "company" else "internal"
+        target_col = collection_name or (
+            settings.QDRANT_COMPANY_COLLECTION_NAME if document_type == "company" else settings.QDRANT_INSTRUCTION_COLLECTION_NAME
+        )
+        
+        for chk in chunks:
+            chk.metadata["document_type"] = document_type
+            chk.metadata["visibility"] = target_vis
+
         return self.index_document_chunks(
             chunks=chunks,
             document_name=path.name,
             recreate_collection=recreate_collection,
-            collection_name=collection_name,
+            collection_name=target_col,
         )
 
 
+def reset_company_knowledge() -> bool:
+    """Deletes and recreates company_knowledge collection without touching instruction_knowledge."""
+    from app.knowledge.indexing.collection_manager import CollectionManager
+    mgr = CollectionManager(collection_name=settings.QDRANT_COMPANY_COLLECTION_NAME)
+    return mgr.ensure_collection(embedding_dimension=384, recreate=True)
+
+
+def reset_instruction_knowledge() -> bool:
+    """Deletes and recreates instruction_knowledge collection without touching company_knowledge."""
+    from app.knowledge.indexing.collection_manager import CollectionManager
+    mgr = CollectionManager(collection_name=settings.QDRANT_INSTRUCTION_COLLECTION_NAME)
+    return mgr.ensure_collection(embedding_dimension=384, recreate=True)
+
+
+def ingest_company_pdf(
+    file_path: Union[str, Path],
+    document_id: Optional[str] = None,
+    max_tokens: int = 512,
+    recreate_collection: bool = False,
+) -> IndexResult:
+    """Ingests a company document into company_knowledge collection (user_visible)."""
+    pipeline = IngestionPipeline()
+    return pipeline.process_pdf_to_index(
+        file_path=file_path,
+        document_id=document_id,
+        max_tokens=max_tokens,
+        recreate_collection=recreate_collection,
+        collection_name=settings.QDRANT_COMPANY_COLLECTION_NAME,
+        document_type="company",
+    )
+
+
+def ingest_instruction_pdf(
+    file_path: Union[str, Path],
+    document_id: Optional[str] = None,
+    max_tokens: int = 512,
+    recreate_collection: bool = False,
+) -> IndexResult:
+    """Ingests an analytical instruction document into instruction_knowledge collection (internal)."""
+    pipeline = IngestionPipeline()
+    return pipeline.process_pdf_to_index(
+        file_path=file_path,
+        document_id=document_id,
+        max_tokens=max_tokens,
+        recreate_collection=recreate_collection,
+        collection_name=settings.QDRANT_INSTRUCTION_COLLECTION_NAME,
+        document_type="instruction",
+    )
 def ingest_pdf(file_path: Union[str, Path], document_id: Optional[str] = None) -> Document:
     """Helper function to execute Phase 1 ingestion pipeline."""
     pipeline = IngestionPipeline()
@@ -233,3 +284,5 @@ def index_pdf(
         recreate_collection=recreate_collection,
         collection_name=collection_name,
     )
+
+

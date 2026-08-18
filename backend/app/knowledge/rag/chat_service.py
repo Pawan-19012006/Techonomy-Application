@@ -42,13 +42,19 @@ class ChatService:
         self.llm_service = llm_service or LLMService()
 
     def _extract_sources(self, retrieval_result: RetrievalResult) -> List[SourceItem]:
-        """Extracts unique document and page citations from reranked retrieval results."""
+        """Extracts unique document and page citations from company retrieval results ONLY."""
         sources: List[SourceItem] = []
         seen = set()
 
         reranked = getattr(retrieval_result, "reranked_results", None) or []
         if isinstance(reranked, list):
             for chunk in reranked:
+                doc_type = getattr(chunk, "document_type", "company")
+                vis = getattr(chunk, "visibility", "user_visible")
+                # HARD EVIDENCE BOUNDARY: Exclude internal instruction documents from citations
+                if doc_type == "instruction" or vis == "internal":
+                    continue
+
                 doc_name = getattr(chunk, "document_name", "document.pdf")
                 raw_pages = getattr(chunk, "page_numbers", None)
                 pages = raw_pages if raw_pages else [None]
