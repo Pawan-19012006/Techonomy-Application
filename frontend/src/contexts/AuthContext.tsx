@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { TeamData } from '../types';
 import { getTeam } from '../services/api';
 
-export const EVENT_DURATION_SECONDS = 9000; // 2 Hours 30 Minutes
+export const EVENT_DURATION_SECONDS = 7200; // 2 Hours
 
 export const getRemainingSeconds = (startedAtStr?: string): number => {
   if (!startedAtStr) return EVENT_DURATION_SECONDS;

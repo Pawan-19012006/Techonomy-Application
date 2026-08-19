@@ -9,7 +9,7 @@ from app.utils.logging import logger
 
 from datetime import datetime, timezone
 
-EVENT_DURATION_SECONDS = 9000  # 2 Hours 30 Minutes competition duration
+EVENT_DURATION_SECONDS = 7200  # 2 Hours competition duration
 
 
 class TeamService:

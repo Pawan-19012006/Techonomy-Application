@@ -64,7 +64,7 @@ export const RulesPage: React.FC = () => {
             <Clock className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-lg font-black text-slate-900 dark:text-white font-sans">
-            2 Hours 30 Mins
+            2 Hours
           </div>
           <p className="text-[11px] font-mono text-slate-400">Per Allotted Batch</p>
         </div>
