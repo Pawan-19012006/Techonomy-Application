@@ -22,7 +22,7 @@
 ---
 
 <p align="center">
-  <img src="docs/images/dashboard.png" alt="Techonomy Platform Dashboard" width="900">
+  <img src="/Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/docs/images/login page.png" alt="Techonomy Platform Dashboard" width="900">
 </p>
 <p align="center"><i>Figure 1: Techonomy Kairos Intelligence Arena — Real-Time Participant Dashboard & Live RAG Interface</i></p>
 
