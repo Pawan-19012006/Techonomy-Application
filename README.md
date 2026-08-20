@@ -101,7 +101,7 @@ The platform guarantees that every answer is **100% grounded in retrieved compan
 ## 🏗️ System Architecture
 
 <p align="center">
-  <img src="docs/images/architecture.png" alt="Techonomy Architecture Diagram" width="900">
+  <img src="docs/images/arch.png" alt="Techonomy Architecture Diagram" width="900">
 </p>
 <p align="center"><i>Figure 2: Techonomy End-to-End System Architecture & Data Flow</i></p>
 
