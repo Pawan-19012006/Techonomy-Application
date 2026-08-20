@@ -22,9 +22,9 @@
 ---
 
 <p align="center">
-  <img src="/Users/pawaneswaran/Desktop/Work/PROJECTS/techonomy/docs/images/login page.png" alt="Techonomy Platform Dashboard" width="900">
+  <img src="docs/images/login page.png" alt="Techonomy Platform Dashboard" width="900">
 </p>
-<p align="center"><i>Figure 1: Techonomy Kairos Intelligence Arena — Real-Time Participant Dashboard & Live RAG Interface</i></p>
+<p align="center"><i>Figure 1: Login Page</i></p>
 
 ---
 
@@ -162,11 +162,6 @@ PDF Documents  ──> PyMuPDF Parser ──> Text Cleaner ──> Semantic Chun
 ## ⚡ LLM Gateway & Multi-Key Load Balancer
 
 To prevent single API-key rate limits (HTTP 429) from causing downtime during competitive events, Techonomy implements a **20-Lane Distributed LLM Scheduler**:
-
-<p align="center">
-  <img src="docs/images/chat.png" alt="Techonomy LLM Gateway Architecture" width="900">
-</p>
-<p align="center"><i>Figure 3: 20-Lane Load Balancer Pool — Gemini Primary (`G01`–`G10`) & OpenRouter Fallback (`N01`–`N10`)</i></p>
 
 ### Pool Allocation & Credentials
 
@@ -461,19 +456,22 @@ docker compose exec backend python scripts/run_release_gate_verification.py
 ## 🖼️ Screenshots & Visuals
 
 <p align="center">
-  <b>Admin & Team Management Overview</b>
   <br>
-  <img src="docs/images/documents.png" alt="Techonomy Documents & Admin View" width="900">
+  <img src="docs/images/Dashboard.png" alt="Techonomy Documents & Admin View" width="900">
 </p>
-<p align="center"><i>Figure 4: Admin Control Dashboard & Document Reference Manager</i></p>
+<p align="center"><i>Figure 3: Participant Dashboard</i></p>
 
----
+<p align="center">
+  <br>
+  <img src="docs/images/Chatbot.png" alt="Techonomy Documents & Admin View" width="900">
+</p>
+<p align="center"><i>Figure 4: Chatbot Page</i></p>
 
-## 🛣️ Roadmap
-
-- [ ] **Multi-Vector Index Hybrid Search**: Integrate Sparse BM25 keyword search alongside Dense Vector embeddings.
-- [ ] **Multi-Modal Document Parsing**: Enhance table and chart parsing for complex financial diagrams using vision models.
-- [ ] **Automated Benchmark Dashboard**: Live latency and evidence retrieval evaluation metrics inside the Admin UI.
+<p align="center">
+  <br>
+  <img src="docs/images/Documents.png" alt="Techonomy Documents & Admin View" width="900">
+</p>
+<p align="center"><i>Figure 5: Documents Viewing Page</i></p>
 
 ---
 
